@@ -208,6 +208,21 @@ table.roster{border-collapse:collapse;width:100%;min-width:480px}
 .t-checkmsg{display:none;margin-top:8px;font:600 12px var(--body);color:#ffe1cf}
 .t-checkmsg.show{display:block}
 
+/* 좌석 선물(공유) */
+.t-share{margin-top:10px}
+.t-sharebtn{width:100%;border:0;border-radius:12px;padding:12px;background:rgba(255,255,255,.92);
+  color:var(--navy);font:700 13px var(--body);cursor:pointer}
+.t-sharebtn:active{transform:scale(.99)}
+.t-sharebox{display:none;margin-top:10px;background:rgba(255,255,255,.14);border-radius:12px;padding:12px}
+.t-sharebox.show{display:block}
+.t-shareurl{width:100%;border:0;border-radius:9px;padding:10px 11px;font:600 12px var(--body);
+  color:#221f3d;background:#fff;outline:none}
+.t-sharebtns{display:flex;gap:8px;margin-top:9px}
+.t-sharebtns button{flex:1;border:0;border-radius:9px;padding:10px;font:700 12px var(--body);
+  cursor:pointer;background:var(--navy);color:#fff}
+.t-sharebtns .t-shdel{flex:0 0 auto;background:none;color:#ffd9c4;text-decoration:underline;padding:10px 4px}
+.t-sharemsg{margin-top:8px;font:600 11.5px var(--body);color:#ffe1cf;line-height:1.5}
+
 /* 입장 완료(비활성) 티켓 */
 .ticket.used{background:#8f8d9e}
 .ticket.used .sheen{display:none}
@@ -409,7 +424,7 @@ footer{margin-top:34px;text-align:center;color:#7672ab;font-size:11.5px;line-hei
 'use strict';
 var CFG = window.TICKET_CONFIG, T = window.TCrypto;
 var $ = function(s){ return document.querySelector(s); };
-var guestView = 'lookup', curTab = 'guest';
+var guestView = 'lookup', curTab = 'guest', isSharedView = false;
 
 /* 상단 이벤트 정보 */
 $('#evName').textContent = CFG.eventName;
@@ -500,6 +515,17 @@ function render(person){
         '<button class="t-staffbtn" type="button">입장 확인 (스태프)</button>' +
       '</div>' +
       '<div class="t-checkmsg"></div>' +
+      (isSharedView ? '' :
+        '<div class="t-share"><button class="t-sharebtn" type="button">🎁 이 좌석만 일행에게 보내기</button>' +
+        '<div class="t-sharebox">' +
+          '<input class="t-shareurl" readonly>' +
+          '<div class="t-sharebtns">' +
+            '<button type="button" class="t-shcopy">링크 복사</button>' +
+            '<button type="button" class="t-shshare">공유하기</button>' +
+            '<button type="button" class="t-shdel">삭제</button>' +
+          '</div>' +
+          '<div class="t-sharemsg">받은 사람은 이 좌석 티켓만 보게 됩니다. 링크를 아는 사람은 누구나 열 수 있으니 일행에게만 보내세요.</div>' +
+        '</div></div>') +
       '<p class="t-notice">' + CFG.noticeLines.map(esc).join('<br>') + '</p>';
     el.querySelector('.t-qr').innerHTML = qrSVG(verifyURL);
     host.appendChild(el);
@@ -538,6 +564,7 @@ $('#form').addEventListener('submit', function(ev){
 });
 
 $('#btnAgain').addEventListener('click', function(){
+  if (isSharedView){ location.href = location.pathname; return; }
   guestView = 'lookup';
   curPerson = null;
   stopStatusPoll();
@@ -579,6 +606,7 @@ function applyCheckins(seats){
       state.innerHTML = '<b>입장 완료</b> · ' + fmtTs(hit.ts);
       btn.style.display = 'none';
       art.querySelector('.t-usedts').textContent = fmtTs(hit.ts) + ' 입장';
+      var sh = art.querySelector('.t-share'); if (sh) sh.style.display = 'none';
     } else {
       art.classList.remove('used');
       state.textContent = '미입장';
@@ -838,6 +866,93 @@ function buildSeatGuide(person){
   host.innerHTML = h;
   host.style.display = 'block';
 }
+
+/* ==================== 좌석 선물(공유) 링크 ==================== */
+function apiShare(payload){
+  return fetch('/api/share', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(Object.assign({ event: CFG.salt }, payload))
+  }).then(function(r){
+    return r.json().catch(function(){ return {}; }).then(function(j){
+      if (!r.ok) { var e = new Error(j.error || ('HTTP ' + r.status)); e.code = j.error; e.status = r.status; throw e; }
+      return j;
+    });
+  });
+}
+function shMsg(art, text){
+  var m = art.querySelector('.t-checkmsg');
+  m.textContent = text; m.classList.add('show');
+  setTimeout(function(){ m.classList.remove('show'); }, 4000);
+}
+function shCopy(art){
+  var inp = art.querySelector('.t-shareurl'), url = inp.value;
+  var done = function(){ shMsg(art, '링크가 복사되었습니다. 카카오톡 등으로 붙여넣어 보내세요.'); };
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(url).then(done).catch(function(){
+      inp.select(); try { document.execCommand('copy'); done(); } catch(e){ shMsg(art, '길게 눌러 직접 복사해 주세요.'); }
+    });
+  } else {
+    inp.select(); try { document.execCommand('copy'); done(); } catch(e){ shMsg(art, '길게 눌러 직접 복사해 주세요.'); }
+  }
+}
+$('#tickets').addEventListener('click', function(ev){
+  var t = ev.target;
+  var art = t.closest ? t.closest('.ticket') : null;
+  if (!art) return;
+  if (t.classList.contains('t-sharebtn')){
+    var row = art.querySelector('.t-check'), box = art.querySelector('.t-sharebox');
+    if (box.classList.contains('show')){ box.classList.remove('show'); return; }
+    t.disabled = true;
+    apiShare({ action: 'create', code: curPerson.c, z: row.dataset.z, s: row.dataset.s })
+      .then(function(j){
+        var url = location.origin + location.pathname + '?g=' + j.token;
+        art.querySelector('.t-shareurl').value = url;
+        box.classList.add('show');
+      }).catch(function(e){
+        shMsg(art, '링크 생성 실패: ' + apiErrMsg(e));
+      }).finally(function(){ t.disabled = false; });
+    return;
+  }
+  if (t.classList.contains('t-shcopy')){ shCopy(art); return; }
+  if (t.classList.contains('t-shshare')){
+    var url = art.querySelector('.t-shareurl').value;
+    if (navigator.share){
+      navigator.share({ title: CFG.eventName + ' 초대 티켓', text: '좌석 초대 티켓이 도착했어요', url: url }).catch(function(){});
+    } else { shCopy(art); }
+    return;
+  }
+  if (t.classList.contains('t-shdel')){
+    if (!window.confirm('공유 링크를 삭제할까요?\n받은 사람은 더 이상 티켓을 열 수 없습니다.')) return;
+    var row2 = art.querySelector('.t-check');
+    t.disabled = true;
+    apiShare({ action: 'revoke', code: curPerson.c, z: row2.dataset.z, s: row2.dataset.s })
+      .then(function(){
+        art.querySelector('.t-sharebox').classList.remove('show');
+        art.querySelector('.t-shareurl').value = '';
+        shMsg(art, '공유 링크를 삭제했습니다.');
+      }).catch(function(e){ shMsg(art, '삭제 실패: ' + apiErrMsg(e)); })
+      .finally(function(){ t.disabled = false; });
+  }
+});
+
+/* 공유 링크(?g=토큰)로 접속한 경우: 해당 좌석 1매만 표시 */
+(function(){
+  var g = new URLSearchParams(location.search).get('g');
+  if (!g) return;
+  isSharedView = true;
+  $('#lookup').innerHTML = '<h2>공유 티켓 여는 중…</h2><p class="desc">잠시만 기다려 주세요.</p>';
+  apiShare({ action: 'resolve', token: g }).then(function(j){
+    render({ n: j.n, c: j.c, t: [j.seat] });
+    $('#hello').innerHTML = '<b>' + esc(j.n) + '</b>님이 보낸 초대 티켓입니다.';
+    $('#btnAgain').textContent = '처음 화면으로';
+  }).catch(function(e){
+    $('#lookup').innerHTML = '<h2>공유 링크를 열 수 없습니다</h2>' +
+      '<p class="desc">' + (e.status === 404
+        ? '링크가 삭제되었거나 좌석 정보가 변경되었습니다. 보내주신 분께 링크를 다시 요청해 주세요.'
+        : esc(apiErrMsg(e))) + '</p>' +
+      '<button class="primary" type="button" onclick="location.href=location.pathname">처음 화면으로</button>';
+  });
+})();
 
 /* ==================== 탭 & 관리자 ==================== */
 var ADMIN_HASH = '1f5e0b0c7f0baac5bf80d43beb3d259f1f22295960d0bc158e24bee738c72831';
