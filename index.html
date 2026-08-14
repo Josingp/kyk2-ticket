@@ -111,6 +111,38 @@ button.primary:focus-visible{outline:3px solid var(--navy);outline-offset:2px}
   color:#c9c6ee;border-radius:13px;padding:13px;font:600 14px var(--body);cursor:pointer}
 .again:focus-visible{outline:3px solid var(--orange);outline-offset:2px}
 
+/* ---------- 탭 ---------- */
+.tabs{display:flex;gap:6px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.13);
+  border-radius:15px;padding:5px;margin-bottom:14px}
+.tabs .tab{flex:1;border:0;border-radius:11px;padding:11px 0;background:none;color:#b9b6dd;
+  font:700 13.5px var(--disp);letter-spacing:.02em;cursor:pointer;transition:background .15s,color .15s}
+.tabs .tab.active{background:var(--orange);color:#fff}
+.tabs .tab:focus-visible{outline:3px solid var(--orange);outline-offset:2px}
+
+/* ---------- 관리자 탭 ---------- */
+.admin-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.linkbtn{border:0;background:none;color:#8a86ad;font:600 12.5px var(--body);cursor:pointer;text-decoration:underline}
+.card code{background:#eeecf7;border-radius:6px;padding:2px 6px;font-size:12px;color:var(--navy)}
+.card a{color:var(--orange-deep);font-weight:700}
+.drop{display:block;margin-top:16px;border:2px dashed #c3bfe0;border-radius:14px;padding:30px 14px;text-align:center;
+  color:#7b77a0;font-size:14px;line-height:1.6;cursor:pointer;transition:.15s;background:#fbfaff}
+.drop.hover{border-color:var(--orange);color:var(--orange);background:#fff6f0}
+.drop input{display:none}
+.bar{height:9px;background:#e7e5f2;border-radius:99px;margin-top:14px;overflow:hidden;display:none}
+.bar i{display:block;height:100%;width:0;background:var(--orange);transition:width .2s}
+.stat{font-size:13px;color:#66627f;margin-top:8px;display:none}
+.warn{display:none;margin-top:12px;background:#fff7ed;border:1.5px solid #f0b27d;border-radius:12px;
+  padding:13px 14px;font-size:12.5px;color:#8a4b12;line-height:1.7;white-space:pre-wrap}
+.err{display:none;margin-top:12px;background:#fdeeea;border:1.5px solid #d84a2c;border-radius:12px;
+  padding:13px 14px;font-size:12.5px;color:#7c1d10;line-height:1.7;white-space:pre-wrap}
+.done{display:none;margin-top:12px;background:#e9f8ee;border:1.5px solid #2fa45c;border-radius:12px;
+  padding:14px;font-size:13px;color:#14522b;line-height:1.8}
+.btns{display:none;gap:10px;margin-top:12px;flex-wrap:wrap}
+.btns button{flex:1 1 100%;border:0;border-radius:12px;padding:14px;font:700 14px var(--body);cursor:pointer}
+#dlDb{background:var(--navy);color:#fff}
+#dlStaff{background:var(--orange);color:#fff}
+.admin-steps{margin:16px 0 0 18px;font-size:12.5px;color:#66627f;line-height:1.8}
+
 footer{margin-top:34px;text-align:center;color:#7672ab;font-size:11.5px;line-height:1.7}
 
 @media (prefers-reduced-motion:reduce){
@@ -131,6 +163,12 @@ footer{margin-top:34px;text-align:center;color:#7672ab;font-size:11.5px;line-hei
     <div class="sub" id="evSub"></div>
     <div class="info" id="evInfo"></div>
   </header>
+
+  <!-- 탭 -->
+  <nav class="tabs" role="tablist">
+    <button class="tab active" type="button" data-tab="guest">티켓 확인</button>
+    <button class="tab" type="button" data-tab="admin">관리자</button>
+  </nav>
 
   <!-- 조회 -->
   <section class="card" id="lookup">
@@ -158,6 +196,49 @@ footer{margin-top:34px;text-align:center;color:#7672ab;font-size:11.5px;line-hei
     <button class="again" id="btnAgain" type="button">다른 정보로 조회</button>
   </section>
 
+  <!-- 관리자: 로그인 -->
+  <section class="card" id="adminLock" style="display:none">
+    <h2>관리자 로그인</h2>
+    <p class="desc">운영자용 티켓 DB 생성 도구입니다. 비밀번호를 입력해 주세요.</p>
+    <form id="adminForm" autocomplete="off">
+      <div class="field">
+        <label for="adminPw">비밀번호</label>
+        <input id="adminPw" type="password" inputmode="numeric" maxlength="12" placeholder="비밀번호" required>
+      </div>
+      <button class="primary" type="submit">로그인</button>
+      <p class="msg" id="adminMsg"></p>
+    </form>
+  </section>
+
+  <!-- 관리자: DB 생성 도구 -->
+  <section class="card" id="adminPanel" style="display:none">
+    <div class="admin-head">
+      <h2>티켓 DB 생성 도구</h2>
+      <button class="linkbtn" id="btnLogout" type="button">로그아웃</button>
+    </div>
+    <p class="desc" style="margin-top:8px">명단 엑셀을 올리면 <b>암호화된 db.json</b>과 <b>스태프 확인용 명단</b>이 만들어집니다.
+    모든 처리는 이 브라우저 안에서만 이루어지며, 어떤 서버로도 명단이 전송되지 않습니다.</p>
+    <p class="desc" style="margin-top:8px">열 이름: <code>이름</code> <code>연락처</code> <code>구역</code> <code>좌석</code> (선택: <code>등급</code>)
+    · 같은 사람의 좌석이 여러 개면 행을 여러 줄로 입력 · 양식: <a href="tools/명단_양식.xlsx" download>명단_양식.xlsx</a></p>
+    <label class="drop" id="drop">
+      명단 엑셀(.xlsx)을 여기로 드래그하거나<br>클릭해서 선택
+      <input type="file" id="file" accept=".xlsx,.xls">
+    </label>
+    <div class="bar" id="bar"><i id="barIn"></i></div>
+    <div class="stat" id="stat"></div>
+    <div class="err" id="err"></div>
+    <div class="warn" id="warn"></div>
+    <div class="done" id="done"></div>
+    <div class="btns" id="btns">
+      <button id="dlDb" type="button">db.json 내려받기</button>
+      <button id="dlStaff" type="button">스태프 확인용 명단(.xlsx) 내려받기</button>
+    </div>
+    <ol class="admin-steps">
+      <li>내려받은 <code>db.json</code>으로 저장소의 <code>data/db.json</code>을 교체하면 약 1분 뒤 반영됩니다.</li>
+      <li><code>스태프 확인용 명단</code>은 확인코드가 들어 있으니 입장 스태프에게만 전달하고, GitHub에는 올리지 마세요.</li>
+    </ol>
+  </section>
+
   <footer>
     문의는 초대 안내를 드린 담당자에게 부탁드립니다.<br>
     ⓒ 팬엔터테인먼트 · 신인감독 김연경2
@@ -172,6 +253,7 @@ footer{margin-top:34px;text-align:center;color:#7672ab;font-size:11.5px;line-hei
 'use strict';
 var CFG = window.TICKET_CONFIG, T = window.TCrypto;
 var $ = function(s){ return document.querySelector(s); };
+var guestView = 'lookup', curTab = 'guest';
 
 /* 상단 이벤트 정보 */
 $('#evName').textContent = CFG.eventName;
@@ -254,8 +336,8 @@ function render(person){
     host.appendChild(el);
   });
   tick();
-  $('#lookup').style.display = 'none';
-  $('#result').style.display = 'block';
+  guestView = 'result';
+  refresh();
   window.scrollTo({ top: 0 });
 }
 
@@ -284,10 +366,225 @@ $('#form').addEventListener('submit', function(ev){
 });
 
 $('#btnAgain').addEventListener('click', function(){
-  $('#result').style.display = 'none';
+  guestView = 'lookup';
   $('#tickets').innerHTML = '';
-  $('#lookup').style.display = 'block';
   $('#inPhone').value = '';
+  refresh();
+});
+
+/* ==================== 탭 & 관리자 ==================== */
+var ADMIN_HASH = '1f5e0b0c7f0baac5bf80d43beb3d259f1f22295960d0bc158e24bee738c72831';
+var authed = false;
+try { authed = sessionStorage.getItem('kyk2AdminOK') === '1'; } catch(e){}
+
+function refresh(){
+  $('#lookup').style.display     = (curTab === 'guest' && guestView === 'lookup') ? 'block' : 'none';
+  $('#result').style.display     = (curTab === 'guest' && guestView === 'result') ? 'block' : 'none';
+  $('#adminLock').style.display  = (curTab === 'admin' && !authed) ? 'block' : 'none';
+  $('#adminPanel').style.display = (curTab === 'admin' &&  authed) ? 'block' : 'none';
+  if (curTab === 'admin' && authed) loadXLSX().catch(function(){});
+}
+function setTab(t){
+  curTab = t;
+  var tabs = document.querySelectorAll('.tabs .tab');
+  for (var i = 0; i < tabs.length; i++) tabs[i].classList.toggle('active', tabs[i].dataset.tab === t);
+  refresh();
+}
+(function(){
+  var tabs = document.querySelectorAll('.tabs .tab');
+  for (var i = 0; i < tabs.length; i++) tabs[i].addEventListener('click', function(){ setTab(this.dataset.tab); });
+  var wantAdmin = location.hash === '#admin' || new URLSearchParams(location.search).get('tab') === 'admin';
+  setTab(wantAdmin ? 'admin' : 'guest');
+})();
+
+/* SheetJS는 관리자 진입 시에만 로드 */
+var xlsxReady = null;
+function loadXLSX(){
+  if (window.XLSX) return Promise.resolve();
+  if (xlsxReady) return xlsxReady;
+  xlsxReady = new Promise(function(res, rej){
+    var s = document.createElement('script');
+    s.src = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
+    s.onload = res;
+    s.onerror = function(){ xlsxReady = null; rej(new Error('xlsx load fail')); };
+    document.head.appendChild(s);
+  });
+  return xlsxReady;
+}
+
+/* 로그인 / 로그아웃 */
+function sha256Hex(str){
+  return crypto.subtle.digest('SHA-256', new TextEncoder().encode(str)).then(function(buf){
+    var a = new Uint8Array(buf), out = '';
+    for (var i = 0; i < a.length; i++) out += ('0' + a[i].toString(16)).slice(-2);
+    return out;
+  });
+}
+$('#adminForm').addEventListener('submit', function(ev){
+  ev.preventDefault();
+  var m = $('#adminMsg'); m.classList.remove('show');
+  sha256Hex($('#adminPw').value.trim()).then(function(h){
+    if (h === ADMIN_HASH){
+      authed = true;
+      try { sessionStorage.setItem('kyk2AdminOK', '1'); } catch(e){}
+      $('#adminPw').value = '';
+      refresh();
+    } else {
+      m.textContent = '비밀번호가 올바르지 않습니다.';
+      m.classList.add('show');
+      $('#adminPw').value = '';
+      $('#adminPw').focus();
+    }
+  });
+});
+$('#btnLogout').addEventListener('click', function(){
+  authed = false;
+  try { sessionStorage.removeItem('kyk2AdminOK'); } catch(e){}
+  refresh();
+});
+
+/* ---------- 파일 입력 ---------- */
+var dbBlobURL = null, staffBook = null;
+var drop = $('#drop');
+['dragover','dragenter'].forEach(function(ev){
+  drop.addEventListener(ev, function(e){ e.preventDefault(); drop.classList.add('hover'); });
+});
+['dragleave','drop'].forEach(function(ev){
+  drop.addEventListener(ev, function(e){ e.preventDefault(); drop.classList.remove('hover'); });
+});
+drop.addEventListener('drop', function(e){
+  var f = e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) handleFile(f);
+});
+$('#file').addEventListener('change', function(e){
+  if (e.target.files[0]) handleFile(e.target.files[0]);
+  e.target.value = '';
+});
+
+function resetAdmin(){
+  ['err','warn','done'].forEach(function(id){ var el = $('#'+id); el.style.display = 'none'; el.textContent = ''; });
+  $('#btns').style.display = 'none';
+  $('#bar').style.display = 'none'; $('#barIn').style.width = '0';
+  $('#stat').style.display = 'none';
+}
+function fail(msg){ var e = $('#err'); e.textContent = msg; e.style.display = 'block'; }
+
+/* ---------- 엑셀 파싱 ---------- */
+function parseSheet(wb){
+  var ws = wb.Sheets[wb.SheetNames[0]];
+  var aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+  var hi = -1, cols = {};
+  for (var r = 0; r < Math.min(aoa.length, 6); r++) {
+    var row = aoa[r].map(function(c){ return String(c).trim(); });
+    var m = {};
+    row.forEach(function(c, idx){
+      if (/^이\s*름$|^성\s*명$/.test(c)) m.name = idx;
+      else if (/연락처|전화|휴대폰|핸드폰/.test(c)) m.phone = idx;
+      else if (/구역/.test(c)) m.zone = idx;
+      else if (/좌석/.test(c)) m.seat = idx;
+      else if (/등급|비고|메모|VIP/i.test(c)) m.grade = idx;
+    });
+    if (m.name != null && m.phone != null) { hi = r; cols = m; break; }
+  }
+  if (hi < 0) throw new Error('제목 행을 찾지 못했습니다. 첫 행에 "이름, 연락처, 구역, 좌석" 열 이름이 있어야 합니다.');
+  if (cols.zone == null || cols.seat == null) throw new Error('"구역"과 "좌석" 열이 필요합니다.');
+
+  var rows = [], problems = [];
+  for (var i = hi + 1; i < aoa.length; i++) {
+    var a = aoa[i];
+    var name = String(a[cols.name] == null ? '' : a[cols.name]).trim();
+    if (!name) continue;
+    var phone = String(a[cols.phone] == null ? '' : a[cols.phone]).trim();
+    var zone  = String(a[cols.zone] == null ? '' : a[cols.zone]).trim();
+    var seat  = String(a[cols.seat] == null ? '' : a[cols.seat]).trim();
+    var grade = cols.grade != null ? String(a[cols.grade] == null ? '' : a[cols.grade]).trim() : '';
+    if (!phone && !zone && !seat) continue;
+    var ln = i + 1;
+    if (T.last4(phone).length < 4) { problems.push(ln + '행 (' + name + '): 연락처 숫자가 4자리 미만'); continue; }
+    if (!zone || !seat) { problems.push(ln + '행 (' + name + '): 구역/좌석 비어 있음'); continue; }
+    rows.push({ ln: ln, name: name, phone: phone, zone: zone, seat: seat, grade: grade });
+  }
+  return { rows: rows, problems: problems };
+}
+
+/* ---------- 변환 ---------- */
+async function handleFile(f){
+  resetAdmin();
+  try { await loadXLSX(); }
+  catch(e){ return fail('엑셀 처리 라이브러리를 불러오지 못했습니다. 네트워크 연결을 확인하고 다시 시도해 주세요.'); }
+  var buf;
+  try { buf = await f.arrayBuffer(); } catch(e){ return fail('파일을 읽지 못했습니다.'); }
+  var parsed;
+  try { parsed = parseSheet(XLSX.read(buf, { type: 'array' })); }
+  catch(e){ return fail(e.message || '엑셀 형식을 해석하지 못했습니다.'); }
+
+  var rows = parsed.rows;
+  if (!rows.length) return fail('처리할 수 있는 행이 없습니다.' + (parsed.problems.length ? '\n- ' + parsed.problems.join('\n- ') : ''));
+
+  var groups = new Map(), collisions = [];
+  rows.forEach(function(r){
+    var key = T.normName(r.name) + '|' + T.last4(r.phone);
+    if (!groups.has(key)) groups.set(key, { name: r.name, phone: r.phone, tickets: [], lns: [] });
+    var g = groups.get(key);
+    var pd = function(p){ return String(p).replace(/\D/g,''); };
+    if (pd(g.phone) !== pd(r.phone))
+      collisions.push(r.name + ': ' + g.lns[0] + '행(' + g.phone + ')과 ' + r.ln + '행(' + r.phone + ')의 이름+뒤4자리가 같지만 전체 번호가 다릅니다. 두 사람이 하나의 조회로 합쳐지니 확인이 필요합니다.');
+    g.tickets.push({ z: r.zone, s: r.seat, g: r.grade || undefined });
+    g.lns.push(r.ln);
+  });
+
+  $('#bar').style.display = 'block';
+  $('#stat').style.display = 'block';
+  var db = { v: 1, built: new Date().toISOString(), records: {}, verify: {} };
+  var staffRows = [];
+  var entries = Array.from(groups.values());
+  var doneN = 0, total = entries.length;
+  var CHUNK = 12;
+  for (var i = 0; i < entries.length; i += CHUNK) {
+    var slice = entries.slice(i, i + CHUNK);
+    await Promise.all(slice.map(async function(g){
+      var code = T.makeCode(8);
+      var rec = await T.deriveRecord(g.name, g.phone, CFG);
+      db.records[rec.id] = await T.encryptJSON(rec.key, { n: g.name, c: code, t: g.tickets });
+      var ver = await T.deriveVerify(code, CFG);
+      db.verify[ver.id] = await T.encryptJSON(ver.key, { n: g.name, t: g.tickets });
+      g.tickets.forEach(function(tk){
+        staffRows.push([g.name, g.phone, tk.z, tk.s, T.fmtCode(code), tk.g || '']);
+      });
+      doneN++;
+      $('#barIn').style.width = Math.round(doneN / total * 100) + '%';
+      $('#stat').textContent = '암호화 중… ' + doneN + ' / ' + total + '명';
+    }));
+  }
+
+  if (dbBlobURL) URL.revokeObjectURL(dbBlobURL);
+  dbBlobURL = URL.createObjectURL(new Blob([JSON.stringify(db, null, 1)], { type: 'application/json' }));
+
+  staffRows.sort(function(a, b){ return (a[2]+a[3]).localeCompare(b[2]+b[3], 'ko'); });
+  var staffAoa = [['이름','연락처','구역','좌석','확인코드','등급']].concat(staffRows);
+  var ws = XLSX.utils.aoa_to_sheet(staffAoa);
+  ws['!cols'] = [{wch:12},{wch:16},{wch:10},{wch:14},{wch:13},{wch:10}];
+  staffBook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(staffBook, ws, '입장확인');
+
+  var d = $('#done');
+  d.innerHTML = '✔ 변환 완료 — <b>' + total + '명 · 티켓 ' + rows.length + '매</b><br>아래 두 파일을 내려받아 적용하세요.';
+  d.style.display = 'block';
+  $('#btns').style.display = 'flex';
+  var warnMsgs = [];
+  if (collisions.length) warnMsgs.push('⚠ 이름+뒤4자리 중복:\n- ' + collisions.join('\n- '));
+  if (parsed.problems.length) warnMsgs.push('⚠ 건너뛴 행:\n- ' + parsed.problems.join('\n- '));
+  if (warnMsgs.length) { var w = $('#warn'); w.textContent = warnMsgs.join('\n\n'); w.style.display = 'block'; }
+  $('#stat').textContent = '완료 · ' + new Date().toLocaleTimeString('ko-KR');
+}
+
+/* ---------- 다운로드 ---------- */
+$('#dlDb').addEventListener('click', function(){
+  var a = document.createElement('a');
+  a.href = dbBlobURL; a.download = 'db.json'; a.click();
+});
+$('#dlStaff').addEventListener('click', function(){
+  XLSX.writeFile(staffBook, '스태프_확인용_명단.xlsx');
 });
 })();
 </script>
