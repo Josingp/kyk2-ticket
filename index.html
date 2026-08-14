@@ -142,6 +142,27 @@ button.primary:focus-visible{outline:3px solid var(--navy);outline-offset:2px}
 #dlDb{background:var(--navy);color:#fff}
 #dlStaff{background:var(--orange);color:#fff}
 .admin-steps{margin:16px 0 0 18px;font-size:12.5px;color:#66627f;line-height:1.8}
+.subhead{margin-top:22px;padding-top:18px;border-top:1.5px solid #edeaf6;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.subhead h3{font-size:14.5px;color:var(--navy)}
+.ghost{border:1.5px solid #c9c5e2;background:#fff;color:var(--navy);border-radius:10px;
+  padding:9px 13px;font:700 12.5px var(--body);cursor:pointer;white-space:nowrap}
+.ghost:active{background:#f4f2fb}
+.rosterbar{display:flex;gap:8px;margin-top:12px}
+.rosterbar input{flex:1;min-width:0;border:1.5px solid #dcd9ea;border-radius:10px;padding:9px 11px;
+  font:500 13px var(--body);background:#fbfaff;outline:none}
+.rosterbar input:focus-visible{border-color:var(--orange)}
+.tablewrap{margin-top:10px;overflow-x:auto;border:1.5px solid #e7e4f3;border-radius:12px}
+table.roster{border-collapse:collapse;width:100%;min-width:480px}
+.roster th{background:#f4f2fb;color:#4c4870;font:700 11.5px var(--body);padding:8px 6px;text-align:left;white-space:nowrap}
+.roster td{border-top:1px solid #efecf7;padding:2px 3px}
+.roster td input{width:100%;border:0;background:none;font:500 12.5px var(--body);color:#26243f;
+  padding:7px 5px;outline:none;min-width:52px}
+.roster td input:focus{background:#fff6f0;border-radius:6px}
+.roster td.rm{width:32px;text-align:center}
+.roster td.rm button{border:0;background:none;color:#c2401d;font-size:15px;cursor:pointer;padding:4px 6px}
+.roster tr.badrow td{background:#fdeeea}
+#btnRosterApply{background:var(--navy);color:#fff}
+#btnRosterStaff{background:var(--orange);color:#fff}
 
 footer{margin-top:34px;text-align:center;color:#7672ab;font-size:11.5px;line-height:1.7}
 
@@ -216,8 +237,8 @@ footer{margin-top:34px;text-align:center;color:#7672ab;font-size:11.5px;line-hei
       <h2>티켓 DB 생성 도구</h2>
       <button class="linkbtn" id="btnLogout" type="button">로그아웃</button>
     </div>
-    <p class="desc" style="margin-top:8px">명단 엑셀을 올리면 <b>암호화된 db.json</b>과 <b>스태프 확인용 명단</b>이 만들어집니다.
-    모든 처리는 이 브라우저 안에서만 이루어지며, 어떤 서버로도 명단이 전송되지 않습니다.</p>
+    <p class="desc" style="margin-top:8px">명단 엑셀을 올리면 암호화 후 <b>서버 DB에 바로 적용</b>됩니다. (재배포 불필요, 즉시 반영)
+    명단 원본은 서버 저장소(Upstash)에만 보관되고, 공개 DB에는 암호문만 올라갑니다.</p>
     <p class="desc" style="margin-top:8px">열 이름: <code>이름</code> <code>연락처</code> <code>구역</code> <code>좌석</code> (선택: <code>등급</code>)
     · 같은 사람의 좌석이 여러 개면 행을 여러 줄로 입력 · 양식: <a href="tools/명단_양식.xlsx" download>명단_양식.xlsx</a></p>
     <label class="drop" id="drop">
@@ -230,13 +251,39 @@ footer{margin-top:34px;text-align:center;color:#7672ab;font-size:11.5px;line-hei
     <div class="warn" id="warn"></div>
     <div class="done" id="done"></div>
     <div class="btns" id="btns">
-      <button id="dlDb" type="button">db.json 내려받기</button>
+      <button id="dlDb" type="button">db.json 내려받기 (백업)</button>
       <button id="dlStaff" type="button">스태프 확인용 명단(.xlsx) 내려받기</button>
     </div>
     <ol class="admin-steps">
-      <li>내려받은 <code>db.json</code>으로 저장소의 <code>data/db.json</code>을 교체하면 약 1분 뒤 반영됩니다.</li>
+      <li>업로드 즉시 서버에 적용됩니다. 자동 적용이 실패하면 <code>db.json</code>을 내려받아 저장소의 <code>data/db.json</code>을 교체하세요. (백업 경로)</li>
       <li><code>스태프 확인용 명단</code>은 확인코드가 들어 있으니 입장 스태프에게만 전달하고, GitHub에는 올리지 마세요.</li>
     </ol>
+
+    <div class="subhead">
+      <h3>서버 명단 조회 · 수정</h3>
+      <button class="ghost" id="btnRosterLoad" type="button">명단 불러오기</button>
+    </div>
+    <p class="desc" id="rosterInfo" style="margin-top:8px">서버에 저장된 현재 명단을 불러와 표에서 바로 고치고 다시 적용할 수 있습니다.</p>
+    <div id="rosterBox" style="display:none">
+      <div class="rosterbar">
+        <input id="rosterSearch" type="text" placeholder="이름 · 연락처 · 구역 검색">
+        <button class="ghost" id="btnRowAdd" type="button">＋ 행 추가</button>
+      </div>
+      <div class="tablewrap">
+        <table class="roster">
+          <thead><tr><th>이름</th><th>연락처</th><th>구역</th><th>좌석</th><th>등급</th><th></th></tr></thead>
+          <tbody id="rosterBody"></tbody>
+        </table>
+      </div>
+      <div class="bar" id="rBar"><i id="rBarIn"></i></div>
+      <div class="stat" id="rStat"></div>
+      <div class="err" id="rErr"></div>
+      <div class="done" id="rDone"></div>
+      <div class="btns" id="rBtns" style="display:flex">
+        <button id="btnRosterApply" type="button">변경사항 서버에 적용</button>
+        <button id="btnRosterStaff" type="button">스태프 확인용 명단(.xlsx)</button>
+      </div>
+    </div>
   </section>
 
   <footer>
@@ -261,10 +308,14 @@ $('#evSub').textContent  = CFG.eventSub;
 $('#evInfo').textContent = CFG.eventInfo;
 document.title = CFG.eventName + ' · 모바일 초대 티켓';
 
-/* DB 로드 */
+/* DB 로드 — 서버(API) 우선, 실패 시 저장소 파일 */
 var DB = null, dbErr = null;
-fetch('data/db.json?v=' + Date.now())
-  .then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); })
+fetch('/api/db?event=' + encodeURIComponent(CFG.salt) + '&v=' + Date.now())
+  .then(function(r){ if(!r.ok) throw 0; return r.json(); })
+  .catch(function(){
+    return fetch('data/db.json?v=' + Date.now())
+      .then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); });
+  })
   .then(function(j){ DB = j; })
   .catch(function(e){ dbErr = e; });
 
@@ -403,16 +454,20 @@ function loadXLSX(){
   if (window.XLSX) return Promise.resolve();
   if (xlsxReady) return xlsxReady;
   xlsxReady = new Promise(function(res, rej){
+    var to = setTimeout(function(){ xlsxReady = null; rej(new Error('xlsx load timeout')); }, 15000);
     var s = document.createElement('script');
     s.src = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
-    s.onload = res;
-    s.onerror = function(){ xlsxReady = null; rej(new Error('xlsx load fail')); };
+    s.onload = function(){ clearTimeout(to); res(); };
+    s.onerror = function(){ clearTimeout(to); xlsxReady = null; rej(new Error('xlsx load fail')); };
     document.head.appendChild(s);
   });
   return xlsxReady;
 }
 
-/* 로그인 / 로그아웃 */
+/* 로그인 / 로그아웃 — 서버 검증 우선, API 불가 시 로컬 해시 검증 */
+var adminPw = '';
+try { adminPw = sessionStorage.getItem('kyk2AdminPw') || ''; } catch(e){}
+
 function sha256Hex(str){
   return crypto.subtle.digest('SHA-256', new TextEncoder().encode(str)).then(function(buf){
     var a = new Uint8Array(buf), out = '';
@@ -420,26 +475,59 @@ function sha256Hex(str){
     return out;
   });
 }
+function apiAdmin(payload){
+  return fetch('/api/admin', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(Object.assign({ pw: adminPw, event: CFG.salt }, payload))
+  }).then(function(r){
+    return r.json().catch(function(){ return {}; }).then(function(j){
+      if (!r.ok) { var e = new Error(j.error || ('HTTP ' + r.status)); e.code = j.error; e.status = r.status; throw e; }
+      return j;
+    });
+  });
+}
+function apiErrMsg(e){
+  if (e && e.code === 'redis_env_missing') return '서버 저장소(Upstash)가 아직 연결되지 않았습니다. Vercel 환경변수를 설정해 주세요. (README 참고)';
+  if (e && e.status === 429) return '시도가 너무 많습니다. 10분 뒤 다시 시도해 주세요.';
+  if (e && e.status === 401) return '비밀번호가 올바르지 않습니다. 로그아웃 후 다시 로그인해 주세요.';
+  if (e && e.status === 413) return '명단이 너무 커서 한 번에 저장할 수 없습니다. (약 1MB 초과)';
+  return '서버에 연결하지 못했습니다. 네트워크를 확인해 주세요.';
+}
+
 $('#adminForm').addEventListener('submit', function(ev){
   ev.preventDefault();
   var m = $('#adminMsg'); m.classList.remove('show');
-  sha256Hex($('#adminPw').value.trim()).then(function(h){
-    if (h === ADMIN_HASH){
-      authed = true;
-      try { sessionStorage.setItem('kyk2AdminOK', '1'); } catch(e){}
+  var pw = $('#adminPw').value.trim();
+  var btn = ev.target.querySelector('button'); btn.disabled = true;
+
+  fetch('/api/admin', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'verify', pw: pw, event: CFG.salt })
+  }).then(function(r){
+    if (r.ok) return 'ok';
+    if (r.status === 401) return 'no';
+    if (r.status === 429) return 'limit';
+    throw 0;
+  }).catch(function(){
+    /* API 사용 불가(로컬 열기 · Upstash 미설정 등) → 로컬 해시로 확인 */
+    return sha256Hex(pw).then(function(h){ return h === ADMIN_HASH ? 'ok' : 'no'; });
+  }).then(function(v){
+    if (v === 'ok'){
+      authed = true; adminPw = pw;
+      try { sessionStorage.setItem('kyk2AdminOK', '1'); sessionStorage.setItem('kyk2AdminPw', pw); } catch(e){}
       $('#adminPw').value = '';
       refresh();
     } else {
-      m.textContent = '비밀번호가 올바르지 않습니다.';
+      m.textContent = v === 'limit' ? '시도가 너무 많습니다. 10분 뒤 다시 시도해 주세요.' : '비밀번호가 올바르지 않습니다.';
       m.classList.add('show');
       $('#adminPw').value = '';
       $('#adminPw').focus();
     }
-  });
+  }).finally(function(){ btn.disabled = false; });
 });
 $('#btnLogout').addEventListener('click', function(){
-  authed = false;
-  try { sessionStorage.removeItem('kyk2AdminOK'); } catch(e){}
+  authed = false; adminPw = '';
+  try { sessionStorage.removeItem('kyk2AdminOK'); sessionStorage.removeItem('kyk2AdminPw'); } catch(e){}
   refresh();
 });
 
@@ -507,7 +595,43 @@ function parseSheet(wb){
   return { rows: rows, problems: problems };
 }
 
-/* ---------- 변환 ---------- */
+/* ---------- DB 생성 (공용) ----------
+   people: [{ n:이름, p:연락처, c?:확인코드(유지용), t:[{z,s,g?}] }] */
+async function buildDB(people, onProg){
+  var db = { v: 1, built: new Date().toISOString(), records: {}, verify: {} };
+  var doneN = 0, total = people.length, CHUNK = 12;
+  for (var i = 0; i < people.length; i += CHUNK) {
+    var slice = people.slice(i, i + CHUNK);
+    await Promise.all(slice.map(async function(g){
+      if (!g.c) g.c = T.makeCode(8);
+      var rec = await T.deriveRecord(g.n, g.p, CFG);
+      db.records[rec.id] = await T.encryptJSON(rec.key, { n: g.n, c: g.c, t: g.t });
+      var ver = await T.deriveVerify(g.c, CFG);
+      db.verify[ver.id] = await T.encryptJSON(ver.key, { n: g.n, t: g.t });
+      doneN++;
+      if (onProg) onProg(doneN, total);
+    }));
+  }
+  return db;
+}
+function makeStaffBook(people){
+  var rows = [];
+  people.forEach(function(g){
+    g.t.forEach(function(tk){ rows.push([g.n, g.p, tk.z, tk.s, T.fmtCode(g.c), tk.g || '']); });
+  });
+  rows.sort(function(a, b){ return (a[2]+a[3]).localeCompare(b[2]+b[3], 'ko'); });
+  var aoa = [['이름','연락처','구역','좌석','확인코드','등급']].concat(rows);
+  var ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{wch:12},{wch:16},{wch:10},{wch:14},{wch:13},{wch:10}];
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '입장확인');
+  return wb;
+}
+function publishDB(db, people){
+  return apiAdmin({ action: 'publish', db: db, roster: { v: 1, built: db.built, people: people } });
+}
+
+/* ---------- 엑셀 변환 → 즉시 서버 적용 ---------- */
 async function handleFile(f){
   resetAdmin();
   try { await loadXLSX(); }
@@ -524,67 +648,209 @@ async function handleFile(f){
   var groups = new Map(), collisions = [];
   rows.forEach(function(r){
     var key = T.normName(r.name) + '|' + T.last4(r.phone);
-    if (!groups.has(key)) groups.set(key, { name: r.name, phone: r.phone, tickets: [], lns: [] });
+    if (!groups.has(key)) groups.set(key, { n: r.name, p: r.phone, t: [], lns: [] });
     var g = groups.get(key);
     var pd = function(p){ return String(p).replace(/\D/g,''); };
-    if (pd(g.phone) !== pd(r.phone))
-      collisions.push(r.name + ': ' + g.lns[0] + '행(' + g.phone + ')과 ' + r.ln + '행(' + r.phone + ')의 이름+뒤4자리가 같지만 전체 번호가 다릅니다. 두 사람이 하나의 조회로 합쳐지니 확인이 필요합니다.');
-    g.tickets.push({ z: r.zone, s: r.seat, g: r.grade || undefined });
+    if (pd(g.p) !== pd(r.phone))
+      collisions.push(r.name + ': ' + g.lns[0] + '행(' + g.p + ')과 ' + r.ln + '행(' + r.phone + ')의 이름+뒤4자리가 같지만 전체 번호가 다릅니다. 두 사람이 하나의 조회로 합쳐지니 확인이 필요합니다.');
+    g.t.push({ z: r.zone, s: r.seat, g: r.grade || undefined });
     g.lns.push(r.ln);
   });
 
   $('#bar').style.display = 'block';
   $('#stat').style.display = 'block';
-  var db = { v: 1, built: new Date().toISOString(), records: {}, verify: {} };
-  var staffRows = [];
-  var entries = Array.from(groups.values());
-  var doneN = 0, total = entries.length;
-  var CHUNK = 12;
-  for (var i = 0; i < entries.length; i += CHUNK) {
-    var slice = entries.slice(i, i + CHUNK);
-    await Promise.all(slice.map(async function(g){
-      var code = T.makeCode(8);
-      var rec = await T.deriveRecord(g.name, g.phone, CFG);
-      db.records[rec.id] = await T.encryptJSON(rec.key, { n: g.name, c: code, t: g.tickets });
-      var ver = await T.deriveVerify(code, CFG);
-      db.verify[ver.id] = await T.encryptJSON(ver.key, { n: g.name, t: g.tickets });
-      g.tickets.forEach(function(tk){
-        staffRows.push([g.name, g.phone, tk.z, tk.s, T.fmtCode(code), tk.g || '']);
-      });
-      doneN++;
-      $('#barIn').style.width = Math.round(doneN / total * 100) + '%';
-      $('#stat').textContent = '암호화 중… ' + doneN + ' / ' + total + '명';
-    }));
-  }
+  var people = Array.from(groups.values()).map(function(g){ return { n: g.n, p: g.p, t: g.t }; });
+  var db = await buildDB(people, function(d, t){
+    $('#barIn').style.width = Math.round(d / t * 100) + '%';
+    $('#stat').textContent = '암호화 중… ' + d + ' / ' + t + '명';
+  });
 
   if (dbBlobURL) URL.revokeObjectURL(dbBlobURL);
   dbBlobURL = URL.createObjectURL(new Blob([JSON.stringify(db, null, 1)], { type: 'application/json' }));
-
-  staffRows.sort(function(a, b){ return (a[2]+a[3]).localeCompare(b[2]+b[3], 'ko'); });
-  var staffAoa = [['이름','연락처','구역','좌석','확인코드','등급']].concat(staffRows);
-  var ws = XLSX.utils.aoa_to_sheet(staffAoa);
-  ws['!cols'] = [{wch:12},{wch:16},{wch:10},{wch:14},{wch:13},{wch:10}];
-  staffBook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(staffBook, ws, '입장확인');
-
-  var d = $('#done');
-  d.innerHTML = '✔ 변환 완료 — <b>' + total + '명 · 티켓 ' + rows.length + '매</b><br>아래 두 파일을 내려받아 적용하세요.';
-  d.style.display = 'block';
+  staffBook = makeStaffBook(people);
   $('#btns').style.display = 'flex';
+
   var warnMsgs = [];
   if (collisions.length) warnMsgs.push('⚠ 이름+뒤4자리 중복:\n- ' + collisions.join('\n- '));
   if (parsed.problems.length) warnMsgs.push('⚠ 건너뛴 행:\n- ' + parsed.problems.join('\n- '));
   if (warnMsgs.length) { var w = $('#warn'); w.textContent = warnMsgs.join('\n\n'); w.style.display = 'block'; }
-  $('#stat').textContent = '완료 · ' + new Date().toLocaleTimeString('ko-KR');
+
+  /* 서버 자동 적용 */
+  var d = $('#done');
+  $('#stat').textContent = '서버에 적용하는 중…';
+  try {
+    await publishDB(db, people);
+    DB = db;
+    serverPeople = people;
+    d.innerHTML = '✔ <b>' + people.length + '명 · 티켓 ' + rows.length + '매</b> — 서버에 적용 완료, 즉시 반영됩니다.<br>스태프 확인용 명단을 내려받아 입장 스태프에게 전달하세요.';
+    d.style.display = 'block';
+    $('#stat').textContent = '적용 완료 · ' + new Date().toLocaleTimeString('ko-KR');
+    if ($('#rosterBox').style.display !== 'none') renderRoster();
+  } catch(e){
+    d.innerHTML = '✔ 변환 완료 — <b>' + people.length + '명 · 티켓 ' + rows.length + '매</b>';
+    d.style.display = 'block';
+    fail('서버 자동 적용 실패: ' + apiErrMsg(e) + '\n아래 db.json을 내려받아 저장소의 data/db.json을 직접 교체해도 됩니다.');
+    $('#stat').textContent = '변환 완료 (서버 미적용) · ' + new Date().toLocaleTimeString('ko-KR');
+  }
 }
 
-/* ---------- 다운로드 ---------- */
+/* ---------- 다운로드 (백업 경로) ---------- */
 $('#dlDb').addEventListener('click', function(){
   var a = document.createElement('a');
   a.href = dbBlobURL; a.download = 'db.json'; a.click();
 });
 $('#dlStaff').addEventListener('click', function(){
   XLSX.writeFile(staffBook, '스태프_확인용_명단.xlsx');
+});
+
+/* ==================== 서버 명단 조회 · 수정 ==================== */
+var serverPeople = null;   // 마지막으로 서버와 동기화된 명단
+var rosterBuilt = '';
+
+function rosterReset(){
+  ['rErr','rDone'].forEach(function(id){ var el = $('#'+id); el.style.display='none'; el.textContent=''; });
+  $('#rBar').style.display='none'; $('#rBarIn').style.width='0';
+  $('#rStat').style.display='none';
+}
+function rosterFail(msg){ var e=$('#rErr'); e.textContent=msg; e.style.display='block'; }
+
+function rowEl(vals, code){
+  var tr = document.createElement('tr');
+  if (code) tr.dataset.c = code;
+  var widths = [86, 118, 74, 104, 62];
+  ['n','p','z','s','g'].forEach(function(k, i){
+    var td = document.createElement('td');
+    var inp = document.createElement('input');
+    inp.value = vals[i] || '';
+    inp.dataset.k = k;
+    inp.style.minWidth = widths[i] + 'px';
+    if (k === 'p') inp.inputMode = 'numeric';
+    td.appendChild(inp); tr.appendChild(td);
+  });
+  var rm = document.createElement('td'); rm.className = 'rm';
+  var b = document.createElement('button'); b.type = 'button'; b.textContent = '✕'; b.title = '행 삭제';
+  b.addEventListener('click', function(){ tr.remove(); rosterCount(); });
+  rm.appendChild(b); tr.appendChild(rm);
+  return tr;
+}
+function renderRoster(){
+  var tb = $('#rosterBody'); tb.innerHTML = '';
+  (serverPeople || []).forEach(function(g){
+    g.t.forEach(function(tk){
+      tb.appendChild(rowEl([g.n, g.p, tk.z, tk.s, tk.g || ''], g.c));
+    });
+  });
+  $('#rosterBox').style.display = 'block';
+  $('#rosterSearch').value = '';
+  rosterCount();
+}
+function rosterCount(){
+  var n = $('#rosterBody').children.length;
+  var ppl = serverPeople ? serverPeople.length : '?';
+  $('#rosterInfo').textContent = '서버 명단: ' + ppl + '명 · 화면의 행(티켓) ' + n + '매' +
+    (rosterBuilt ? ' · 마지막 적용 ' + new Date(rosterBuilt).toLocaleString('ko-KR') : '');
+}
+
+$('#btnRosterLoad').addEventListener('click', function(){
+  rosterReset();
+  var btn = this; btn.disabled = true; btn.textContent = '불러오는 중…';
+  loadXLSX().catch(function(){});
+  apiAdmin({ action: 'roster' }).then(function(j){
+    serverPeople = (j.roster && j.roster.people) || [];
+    rosterBuilt = (j.roster && j.roster.built) || '';
+    renderRoster();
+    if (!serverPeople.length)
+      $('#rosterInfo').textContent = '서버에 저장된 명단이 없습니다. 엑셀을 업로드하거나 아래에서 행을 추가해 시작하세요.';
+  }).catch(function(e){
+    rosterFail('명단을 불러오지 못했습니다: ' + apiErrMsg(e));
+    $('#rosterBox').style.display = 'block';
+  }).finally(function(){ btn.disabled = false; btn.textContent = '명단 불러오기'; });
+});
+
+$('#btnRowAdd').addEventListener('click', function(){
+  var tr = rowEl(['', '', '', '', ''], null);
+  $('#rosterBody').appendChild(tr);
+  tr.querySelector('input').focus();
+  rosterCount();
+});
+
+$('#rosterSearch').addEventListener('input', function(){
+  var q = this.value.trim().toLowerCase();
+  var trs = $('#rosterBody').children;
+  for (var i = 0; i < trs.length; i++) {
+    var txt = '';
+    var ins = trs[i].querySelectorAll('input');
+    for (var k = 0; k < ins.length; k++) txt += ins[k].value + ' ';
+    trs[i].style.display = (!q || txt.toLowerCase().indexOf(q) !== -1) ? '' : 'none';
+  }
+});
+
+/* 표 → people[] (기존 사람은 확인코드 유지) */
+function collectRoster(){
+  var oldByKey = new Map();
+  (serverPeople || []).forEach(function(g){
+    oldByKey.set(T.normName(g.n) + '|' + T.last4(g.p), g.c);
+  });
+  var trs = $('#rosterBody').children;
+  var groups = new Map(), errs = [], ticketCount = 0;
+  for (var i = 0; i < trs.length; i++) {
+    var tr = trs[i]; tr.classList.remove('badrow');
+    var v = {};
+    var ins = tr.querySelectorAll('input');
+    for (var k = 0; k < ins.length; k++) v[ins[k].dataset.k] = ins[k].value.trim();
+    if (!v.n && !v.p && !v.z && !v.s) { continue; } // 완전 빈 행 무시
+    var bad = [];
+    if (!v.n) bad.push('이름');
+    if (T.last4(v.p).length < 4) bad.push('연락처(숫자 4자리 이상)');
+    if (!v.z) bad.push('구역');
+    if (!v.s) bad.push('좌석');
+    if (bad.length) { tr.classList.add('badrow'); errs.push((i+1) + '번째 행: ' + bad.join(', ') + ' 확인'); continue; }
+    var key = T.normName(v.n) + '|' + T.last4(v.p);
+    if (!groups.has(key)) groups.set(key, { n: v.n, p: v.p, c: oldByKey.get(key) || undefined, t: [] });
+    groups.get(key).t.push({ z: v.z, s: v.s, g: v.g || undefined });
+    ticketCount++;
+  }
+  if (errs.length) throw new Error('- ' + errs.join('\n- '));
+  return { people: Array.from(groups.values()), tickets: ticketCount };
+}
+
+$('#btnRosterApply').addEventListener('click', async function(){
+  rosterReset();
+  var col;
+  try { col = collectRoster(); }
+  catch(e){ return rosterFail('아래 행을 고친 뒤 다시 적용해 주세요.\n' + e.message); }
+  if (!col.people.length) return rosterFail('적용할 행이 없습니다. 명단을 비우려면 행을 남기지 말고 확인 후 다시 시도하세요.');
+  if (!window.confirm(col.people.length + '명 · 티켓 ' + col.tickets + '매로 서버 명단을 교체합니다. 계속할까요?')) return;
+
+  var btn = this; btn.disabled = true;
+  try {
+    try { await loadXLSX(); } catch(e){}
+    $('#rBar').style.display = 'block'; $('#rStat').style.display = 'block';
+    var db = await buildDB(col.people, function(d, t){
+      $('#rBarIn').style.width = Math.round(d / t * 100) + '%';
+      $('#rStat').textContent = '암호화 중… ' + d + ' / ' + t + '명';
+    });
+    $('#rStat').textContent = '서버에 적용하는 중…';
+    await publishDB(db, col.people);
+    DB = db;
+    serverPeople = col.people;
+    rosterBuilt = db.built;
+    if (window.XLSX) staffBook = makeStaffBook(col.people);
+    renderRoster();
+    var d = $('#rDone');
+    d.textContent = '✔ 적용 완료 — 즉시 반영됩니다. 좌석·코드가 바뀐 사람이 있으면 스태프 명단을 새로 내려받아 전달하세요.';
+    d.style.display = 'block';
+    $('#rStat').textContent = '적용 완료 · ' + new Date().toLocaleTimeString('ko-KR');
+  } catch(e){
+    rosterFail('적용 실패: ' + apiErrMsg(e));
+  } finally { btn.disabled = false; }
+});
+
+$('#btnRosterStaff').addEventListener('click', function(){
+  if (!serverPeople || !serverPeople.length) return rosterFail('먼저 명단을 불러오거나 적용해 주세요.');
+  loadXLSX().then(function(){
+    XLSX.writeFile(makeStaffBook(serverPeople), '스태프_확인용_명단.xlsx');
+  }).catch(function(){ rosterFail('엑셀 라이브러리를 불러오지 못했습니다. 네트워크를 확인해 주세요.'); });
 });
 })();
 </script>

@@ -71,8 +71,12 @@ button:disabled{opacity:.5}
 var CFG = window.TICKET_CONFIG, T = window.TCrypto;
 var $ = function(s){ return document.querySelector(s); };
 var DB = null, dbErr = null;
-var ready = fetch('data/db.json?v=' + Date.now())
-  .then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); })
+var ready = fetch('/api/db?event=' + encodeURIComponent(CFG.salt) + '&v=' + Date.now())
+  .then(function(r){ if(!r.ok) throw 0; return r.json(); })
+  .catch(function(){
+    return fetch('data/db.json?v=' + Date.now())
+      .then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); });
+  })
   .then(function(j){ DB = j; })
   .catch(function(e){ dbErr = e; });
 
