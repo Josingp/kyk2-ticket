@@ -8,7 +8,7 @@
    - roster  : 서버에 저장된 명단(평문, Redis 내부에만 존재) 반환
    - publish : 새 DB(암호문) + 명단을 Redis에 저장 → 즉시 반영
    ============================================================ */
-const { redis, sanitizeEvent, checkPw, pwBlocked, notePwFail, readBody } = require('./_lib');
+const { redis, sanitizeEvent, checkPw, pwBlocked, notePwFail, readBody, getRosterCached, bustEvent } = require('./_lib');
 
 const MAX_BYTES = 950000; // Upstash 요청 한도(1MB) 보호
 
@@ -30,9 +30,7 @@ module.exports = async (req, res) => {
     }
 
     if (body.action === 'roster') {
-      const v = await redis(['GET', K + ':roster']);
-      let roster = null;
-      if (v) { try { roster = JSON.parse(v); } catch (e) { roster = null; } }
+      const roster = await getRosterCached(ev, 5000);
       res.status(200).json({ ok: true, roster });
       return;
     }
@@ -49,6 +47,7 @@ module.exports = async (req, res) => {
       }
       await redis(['SET', K + ':db', dbStr]);
       await redis(['SET', K + ':roster', roStr]);
+      bustEvent(ev);
       res.status(200).json({ ok: true, people: roster && roster.people ? roster.people.length : null,
         records: Object.keys(db.records).length });
       return;

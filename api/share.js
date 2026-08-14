@@ -11,7 +11,7 @@
                해당 좌석만 반환. → { n, c, seat:{z,s,g} }
    - revoke  : { event, code, z, s }  소유자만. 링크 삭제(회수).
    ============================================================ */
-const { redis, sanitizeEvent, softLimit, getRoster, readBody } = require('./_lib');
+const { redis, sanitizeEvent, getRosterCached, getHashCached, bustKey, memLimit, readBody } = require('./_lib');
 const crypto = require('node:crypto');
 
 const norm = v => String(v == null ? '' : v).trim();
@@ -31,18 +31,19 @@ module.exports = async (req, res) => {
   const K = 'tickets:' + ev + ':share';
 
   try {
-    if (!(await softLimit(req, 900))) { res.status(429).json({ error: 'too_many' }); return; }
+    if (!memLimit(req, 900)) { res.status(429).json({ error: 'too_many' }); return; }
 
     /* ---- 수신자: 토큰으로 좌석 1매 조회 ---- */
     if (body.action === 'resolve') {
       const tok = normCode(body.token);
       if (tok.length < 8) { res.status(400).json({ error: 'bad_token' }); return; }
-      const raw = await redis(['HGET', K, tok]);
+      const shareMap = await getHashCached('share', ev, 10000);
+      const raw = shareMap[tok];
       if (!raw) { res.status(404).json({ error: 'unknown_token' }); return; }
       let d = null;
       try { d = JSON.parse(raw); } catch (e) {}
       if (!d) { res.status(404).json({ error: 'unknown_token' }); return; }
-      const roster = await getRoster(ev);
+      const roster = await getRosterCached(ev, 10000);
       if (!roster || !roster.people) { res.status(404).json({ error: 'no_roster' }); return; }
       const person = roster.people.find(p => normCode(p.c) === normCode(d.c));
       const seat = person && (person.t || []).find(tk => norm(tk.z) === d.z && norm(tk.s) === d.s);
@@ -55,7 +56,7 @@ module.exports = async (req, res) => {
     /* ---- 이하 소유자(확인코드 인증) ---- */
     const code = normCode(body.code), z = norm(body.z), s = norm(body.s);
     if (code.length < 8 || !z || !s) { res.status(400).json({ error: 'bad_seat' }); return; }
-    const roster = await getRoster(ev);
+    const roster = await getRosterCached(ev, 10000);
     if (!roster || !roster.people) { res.status(404).json({ error: 'no_roster' }); return; }
     const person = roster.people.find(p => normCode(p.c) === code);
     const valid = person && (person.t || []).some(tk => norm(tk.z) === z && norm(tk.s) === s);
@@ -68,6 +69,7 @@ module.exports = async (req, res) => {
         tok = makeToken(12);
         await redis(['HSET', K, seatKey, tok]);
         await redis(['HSET', K, tok, JSON.stringify({ c: person.c, z: z, s: s, t: Date.now() })]);
+        bustKey('share', ev);
       }
       res.status(200).json({ ok: true, token: tok });
       return;
@@ -75,7 +77,7 @@ module.exports = async (req, res) => {
 
     if (body.action === 'revoke') {
       const tok = await redis(['HGET', K, seatKey]);
-      if (tok) { await redis(['HDEL', K, tok]); await redis(['HDEL', K, seatKey]); }
+      if (tok) { await redis(['HDEL', K, tok]); await redis(['HDEL', K, seatKey]); bustKey('share', ev); }
       res.status(200).json({ ok: true });
       return;
     }

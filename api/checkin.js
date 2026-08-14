@@ -11,7 +11,7 @@
    - set    : 입장 처리/취소. { event, pw, code, z, s, on }
               스태프/관리자 비밀번호 필요. 명단에 있는 좌석만 허용.
    ============================================================ */
-const { redis, sanitizeEvent, checkPw, pwBlocked, notePwFail, softLimit, getRoster, readBody } = require('./_lib');
+const { redis, sanitizeEvent, checkPw, pwBlocked, notePwFail, getRosterCached, getHashCached, bustKey, memLimit, readBody } = require('./_lib');
 
 const norm = v => String(v == null ? '' : v).trim();
 const normCode = v => norm(v).replace(/[^0-9a-zA-Z]/g, '').toUpperCase();
@@ -26,16 +26,14 @@ module.exports = async (req, res) => {
   try {
     /* ---- 관람객: 본인 좌석 상태 ---- */
     if (body.action === 'status') {
-      if (!(await softLimit(req, 900))) { res.status(429).json({ error: 'too_many' }); return; }
+      if (!memLimit(req, 900)) { res.status(429).json({ error: 'too_many' }); return; }
       const code = normCode(body.code);
       if (code.length < 8) { res.status(400).json({ error: 'bad_code' }); return; }
-      const roster = await getRoster(ev);
+      const roster = await getRosterCached(ev, 10000);
       if (!roster || !roster.people) { res.status(404).json({ error: 'no_roster' }); return; }
       const person = roster.people.find(p => normCode(p.c) === code);
       if (!person) { res.status(404).json({ error: 'unknown_code' }); return; }
-      const flat = await redis(['HGETALL', K]) || [];
-      const map = {};
-      for (let i = 0; i < flat.length; i += 2) map[flat[i]] = flat[i + 1];
+      const map = await getHashCached('checkin', ev, 3000);
       const seats = (person.t || []).map(tk => ({
         z: norm(tk.z), s: norm(tk.s),
         ts: map[person.c + '|' + norm(tk.z) + '|' + norm(tk.s)] || null,
@@ -48,16 +46,17 @@ module.exports = async (req, res) => {
        유효한 확인코드 소지 = 본인 티켓 증명이며, 처리는 본인에게 불리한
        방향(사용 처리)이라 위조 유인이 없음. 취소는 아래에서 비밀번호 필요. ---- */
     if (body.action === 'set' && body.on) {
-      if (!(await softLimit(req, 900))) { res.status(429).json({ error: 'too_many' }); return; }
+      if (!memLimit(req, 900)) { res.status(429).json({ error: 'too_many' }); return; }
       const code = normCode(body.code), z = norm(body.z), s = norm(body.s);
       if (code.length < 8 || !z || !s) { res.status(400).json({ error: 'bad_seat' }); return; }
-      const roster = await getRoster(ev);
+      const roster = await getRosterCached(ev, 10000);
       if (!roster || !roster.people) { res.status(404).json({ error: 'no_roster' }); return; }
       const person = roster.people.find(p => normCode(p.c) === code);
       const valid = person && (person.t || []).some(tk => norm(tk.z) === z && norm(tk.s) === s);
       if (!valid) { res.status(404).json({ error: 'unknown_seat' }); return; }
       const ts = new Date().toISOString();
       await redis(['HSET', K, person.c + '|' + z + '|' + s, ts]);
+      bustKey('checkin', ev);
       res.status(200).json({ ok: true, ts });
       return;
     }
@@ -67,9 +66,7 @@ module.exports = async (req, res) => {
     if (!checkPw(body.pw)) { await notePwFail(req); res.status(401).json({ error: 'unauthorized' }); return; }
 
     if (body.action === 'list') {
-      const flat = await redis(['HGETALL', K]) || [];
-      const checkins = {};
-      for (let i = 0; i < flat.length; i += 2) checkins[flat[i]] = flat[i + 1];
+      const checkins = await getHashCached('checkin', ev, 2000);
       res.status(200).json({ ok: true, checkins });
       return;
     }
@@ -78,12 +75,13 @@ module.exports = async (req, res) => {
     if (body.action === 'set') {
       const code = normCode(body.code), z = norm(body.z), s = norm(body.s);
       if (code.length < 8 || !z || !s) { res.status(400).json({ error: 'bad_seat' }); return; }
-      const roster = await getRoster(ev);
+      const roster = await getRosterCached(ev, 10000);
       if (!roster || !roster.people) { res.status(404).json({ error: 'no_roster' }); return; }
       const person = roster.people.find(p => normCode(p.c) === code);
       const valid = person && (person.t || []).some(tk => norm(tk.z) === z && norm(tk.s) === s);
       if (!valid) { res.status(404).json({ error: 'unknown_seat' }); return; }
       await redis(['HDEL', K, person.c + '|' + z + '|' + s]);
+      bustKey('checkin', ev);
       res.status(200).json({ ok: true, ts: null });
       return;
     }

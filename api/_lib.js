@@ -78,10 +78,61 @@ async function getRoster(ev) {
   try { return JSON.parse(v); } catch (e) { return null; }
 }
 
+/* ── 인스턴스 메모리 캐시 ──
+   웜 상태의 서버 함수가 요청마다 Redis를 때리지 않도록 짧은 TTL로 결과를 재사용.
+   행사 당일 수백 명이 동시에 폴링해도 Redis 호출은 인스턴스당 TTL 주기로만 발생. */
+const MEM = { store: new Map(), rl: new Map() };
+function memGet(k) {
+  const e = MEM.store.get(k);
+  if (e && Date.now() < e.exp) return e.v;
+  MEM.store.delete(k);
+  return undefined;
+}
+function memSet(k, v, ttl) { MEM.store.set(k, { v, exp: Date.now() + ttl }); return v; }
+function bustKey(name, ev) { MEM.store.delete(name + ':' + ev); }
+function bustEvent(ev) { ['roster', 'db', 'checkin', 'share'].forEach(n => bustKey(n, ev)); }
+
+async function getRosterCached(ev, ttl) {
+  const k = 'roster:' + ev;
+  let v = memGet(k);
+  if (v !== undefined) return v;
+  v = await getRoster(ev);
+  return memSet(k, v, ttl || 10000);
+}
+async function getDbCached(ev, ttl) {
+  const k = 'db:' + ev;
+  let v = memGet(k);
+  if (v !== undefined) return v;
+  v = await redis(['GET', 'tickets:' + ev + ':db']);
+  return memSet(k, v, ttl || 5000);
+}
+async function getHashCached(name, ev, ttl) {
+  const k = name + ':' + ev;
+  let v = memGet(k);
+  if (v !== undefined) return v;
+  const flat = await redis(['HGETALL', 'tickets:' + ev + ':' + name]) || [];
+  const m = {};
+  for (let i = 0; i < flat.length; i += 2) m[flat[i]] = flat[i + 1];
+  return memSet(k, m, ttl || 3000);
+}
+
+/* 인증 없는 엔드포인트용 인메모리 요청 한도(10분 창) — Redis 소모 없음 */
+function memLimit(req, max) {
+  const ip = clientIp(req), now = Date.now();
+  let e = MEM.rl.get(ip);
+  if (!e || now > e.exp) {
+    if (MEM.rl.size > 5000) MEM.rl.clear();
+    e = { n: 0, exp: now + 600000 };
+    MEM.rl.set(ip, e);
+  }
+  return ++e.n <= (max || 900);
+}
+
 function readBody(req) {
   let b = req.body;
   if (typeof b === 'string') { try { b = JSON.parse(b); } catch (e) { b = null; } }
   return (b && typeof b === 'object') ? b : {};
 }
 
-module.exports = { redis, sanitizeEvent, checkPw, pwBlocked, notePwFail, softLimit, getRoster, readBody };
+module.exports = { redis, sanitizeEvent, checkPw, pwBlocked, notePwFail, softLimit, getRoster, readBody,
+  getRosterCached, getDbCached, getHashCached, bustKey, bustEvent, memLimit };
