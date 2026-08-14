@@ -71,9 +71,61 @@ async function softLimit(req, max) {
   return n <= (max || 900);
 }
 
-/* 서버 저장 명단 로드 */
+/* ── 저장 데이터 암호화 (개인정보 안전성 확보조치) ──
+   환경변수 DATA_KEY 설정 시 명단을 AES-256-GCM으로 암호화해 저장한다.
+   Upstash에는 암호문만 남아, 저장소가 유출돼도 명단(이름·연락처)이 노출되지 않는다. */
+function dataKey() {
+  const k = process.env.DATA_KEY;
+  if (!k) return null;
+  return crypto.createHash('sha256').update(String(k), 'utf8').digest();
+}
+function encryptStr(plain) {
+  const key = dataKey();
+  if (!key) return plain;
+  const iv = crypto.randomBytes(12);
+  const c = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const ct = Buffer.concat([c.update(String(plain), 'utf8'), c.final()]);
+  return 'enc1:' + Buffer.concat([iv, c.getAuthTag(), ct]).toString('base64');
+}
+function decryptStr(v) {
+  if (typeof v !== 'string' || v.indexOf('enc1:') !== 0) return v;
+  const key = dataKey();
+  if (!key) return null;
+  try {
+    const b = Buffer.from(v.slice(5), 'base64');
+    const d = crypto.createDecipheriv('aes-256-gcm', key, b.subarray(0, 12));
+    d.setAuthTag(b.subarray(12, 28));
+    return Buffer.concat([d.update(b.subarray(28)), d.final()]).toString('utf8');
+  } catch (e) { return null; }
+}
+
+/* ── 세션 토큰: 브라우저에 비밀번호 대신 만료형 토큰만 저장 (DATA_KEY 필요) ── */
+function makeSession(hours) {
+  const key = dataKey();
+  if (!key) return null;
+  const exp = Date.now() + (hours || 6) * 3600000;
+  const mac = crypto.createHmac('sha256', key).update('s' + exp).digest('hex').slice(0, 40);
+  return exp + '.' + mac;
+}
+function checkSession(tok) {
+  const key = dataKey();
+  if (!key || typeof tok !== 'string') return false;
+  const i = tok.indexOf('.');
+  if (i < 1) return false;
+  const exp = parseInt(tok.slice(0, i), 10);
+  if (!exp || Date.now() > exp) return false;
+  const want = crypto.createHmac('sha256', key).update('s' + exp).digest('hex').slice(0, 40);
+  const a = Buffer.from(tok.slice(i + 1)), b = Buffer.from(want);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+/* 비밀번호 또는 세션 토큰 중 하나로 인증 */
+function authed(body) { return checkSession(body && body.tk) || checkPw(body && body.pw); }
+
+/* 서버 저장 명단 로드 (암호문이면 복호화) */
 async function getRoster(ev) {
-  const v = await redis(['GET', 'tickets:' + ev + ':roster']);
+  let v = await redis(['GET', 'tickets:' + ev + ':roster']);
+  if (!v) return null;
+  v = decryptStr(v);
   if (!v) return null;
   try { return JSON.parse(v); } catch (e) { return null; }
 }
@@ -135,4 +187,5 @@ function readBody(req) {
 }
 
 module.exports = { redis, sanitizeEvent, checkPw, pwBlocked, notePwFail, softLimit, getRoster, readBody,
-  getRosterCached, getDbCached, getHashCached, bustKey, bustEvent, memLimit };
+  getRosterCached, getDbCached, getHashCached, bustKey, bustEvent, memLimit,
+  encryptStr, decryptStr, dataKey, makeSession, checkSession, authed };

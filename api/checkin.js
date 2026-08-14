@@ -11,7 +11,7 @@
    - set    : 입장 처리/취소. { event, pw, code, z, s, on }
               스태프/관리자 비밀번호 필요. 명단에 있는 좌석만 허용.
    ============================================================ */
-const { redis, sanitizeEvent, checkPw, pwBlocked, notePwFail, getRosterCached, getHashCached, bustKey, memLimit, readBody } = require('./_lib');
+const { redis, sanitizeEvent, checkPw, pwBlocked, notePwFail, checkSession, getRosterCached, getHashCached, bustKey, memLimit, readBody } = require('./_lib');
 
 const norm = v => String(v == null ? '' : v).trim();
 const normCode = v => norm(v).replace(/[^0-9a-zA-Z]/g, '').toUpperCase();
@@ -61,9 +61,11 @@ module.exports = async (req, res) => {
       return;
     }
 
-    /* ---- 이하 스태프/관리자 (비밀번호) ---- */
-    if (await pwBlocked(req)) { res.status(429).json({ error: 'too_many_attempts' }); return; }
-    if (!checkPw(body.pw)) { await notePwFail(req); res.status(401).json({ error: 'unauthorized' }); return; }
+    /* ---- 이하 스태프/관리자 (세션 토큰 또는 비밀번호) ---- */
+    if (!checkSession(body.tk)) {
+      if (await pwBlocked(req)) { res.status(429).json({ error: 'too_many_attempts' }); return; }
+      if (!checkPw(body.pw)) { await notePwFail(req); res.status(401).json({ error: 'unauthorized' }); return; }
+    }
 
     if (body.action === 'list') {
       const checkins = await getHashCached('checkin', ev, 2000);
