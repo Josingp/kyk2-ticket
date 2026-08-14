@@ -111,8 +111,12 @@ function apiCheckin(payload){
 }
 
 var curCode = '', pollT = null, checkinOff = false;
-var staffPw = '';
-try { staffPw = sessionStorage.getItem('kyk2StaffPw') || ''; } catch(e){}
+var staffPw = '', staffTk = '';
+try {
+  staffPw = sessionStorage.getItem('kyk2StaffPw') || '';
+  staffTk = sessionStorage.getItem('kyk2StaffTk') || '';
+} catch(e){}
+function staffAuthed(){ return !!(staffPw || staffTk); }
 
 function show(ok, html){
   var o = $('#out'); o.className = ok ? 'ok' : 'bad'; o.innerHTML = html;
@@ -121,14 +125,14 @@ function show(ok, html){
 function renderStaffBox(){
   var sb = $('#sb'); if (!sb) return;
   if (checkinOff){ sb.innerHTML=''; return; }
-  if (staffPw){
+  if (staffAuthed()){
     sb.innerHTML = '<button type="button" id="sbAll">전체 입장 처리</button>' +
       '<button type="button" id="sbLock" class="ghostb">스태프 잠금</button><div class="staffmsg" id="sbMsg"></div>';
   } else {
     sb.innerHTML = '<button type="button" id="sbUnlock" class="ghostb">스태프 모드 열기 (입장 처리)</button><div class="staffmsg" id="sbMsg"></div>';
   }
   var tgs = document.querySelectorAll('#out li .tg');
-  for (var i=0;i<tgs.length;i++) tgs[i].style.display = staffPw ? '' : 'none';
+  for (var i=0;i<tgs.length;i++) tgs[i].style.display = staffAuthed() ? '' : 'none';
 }
 function sbErr(m){ var el=$('#sbMsg'); if(el) el.textContent=m; }
 
@@ -198,10 +202,10 @@ function check(codeRaw){
 }
 
 function setSeat(li, on, doneCb){
-  apiCheckin({ action:'set', pw: staffPw, code: curCode, z: li.dataset.z, s: li.dataset.s, on: on })
+  apiCheckin({ action:'set', pw: staffPw || undefined, tk: staffTk || undefined, code: curCode, z: li.dataset.z, s: li.dataset.s, on: on })
     .then(function(){ if (doneCb) doneCb(); refreshStates(); })
     .catch(function(e){
-      if (e.status===401){ staffPw=''; try{sessionStorage.removeItem('kyk2StaffPw');}catch(x){} renderStaffBox(); sbErr('비밀번호가 만료되었습니다. 스태프 모드를 다시 열어주세요.'); }
+      if (e.status===401){ staffPw=''; staffTk=''; try{sessionStorage.removeItem('kyk2StaffPw');sessionStorage.removeItem('kyk2StaffTk');}catch(x){} renderStaffBox(); sbErr('인증이 만료되었습니다. 스태프 모드를 다시 열어주세요.'); }
       else sbErr('처리 실패: ' + (e.code==='redis_env_missing' ? '서버 저장소 미설정' : (e.message||'네트워크 오류')));
     });
 }
@@ -227,7 +231,15 @@ $('#out').addEventListener('click', function(ev){
     fetch('/api/admin', { method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ action:'verify', pw: pw, event: CFG.salt }) })
     .then(function(r){
-      if (r.ok){ staffPw = pw; try{sessionStorage.setItem('kyk2StaffPw', pw);}catch(e){} renderStaffBox(); refreshStates(); }
+      if (r.ok){
+        return r.json().catch(function(){ return {}; }).then(function(j){
+          if (j.session){ staffTk = j.session; staffPw = '';
+            try{ sessionStorage.setItem('kyk2StaffTk', j.session); sessionStorage.removeItem('kyk2StaffPw'); }catch(e){}
+          } else { staffPw = pw; staffTk = '';
+            try{ sessionStorage.setItem('kyk2StaffPw', pw); }catch(e){} }
+          renderStaffBox(); refreshStates();
+        });
+      }
       else if (r.status===401) sbErr('비밀번호가 올바르지 않습니다.');
       else sbErr('서버 오류 (' + r.status + ')');
     }).catch(function(){ sbErr('서버에 연결하지 못했습니다.'); })
@@ -246,7 +258,8 @@ $('#out').addEventListener('click', function(ev){
     return;
   }
   if (t.id === 'sbLock'){
-    staffPw=''; try{sessionStorage.removeItem('kyk2StaffPw');}catch(e){}
+    staffPw=''; staffTk='';
+    try{ sessionStorage.removeItem('kyk2StaffPw'); sessionStorage.removeItem('kyk2StaffTk'); }catch(e){}
     renderStaffBox();
   }
 });
