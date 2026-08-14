@@ -179,10 +179,6 @@ table.roster{border-collapse:collapse;width:100%;min-width:480px}
 .t-state b{font-family:var(--disp)}
 .t-staffbtn{border:0;border-radius:9px;padding:9px 12px;background:rgba(255,255,255,.92);
   color:var(--navy);font:700 11.5px var(--body);cursor:pointer;white-space:nowrap}
-.t-pin{display:none;gap:8px;margin-top:10px}
-.t-pin.show{display:flex}
-.t-pin input{flex:1;min-width:0;border:0;border-radius:9px;padding:10px 12px;font:700 14px var(--body);outline:none}
-.t-pin button{border:0;border-radius:9px;padding:10px 14px;background:var(--navy);color:#fff;font:700 12.5px var(--body);cursor:pointer}
 .t-checkmsg{display:none;margin-top:8px;font:600 12px var(--body);color:#ffe1cf}
 .t-checkmsg.show{display:block}
 
@@ -475,7 +471,6 @@ function render(person){
         '<div class="t-state">입장 상태 확인 중…</div>' +
         '<button class="t-staffbtn" type="button">입장 확인 (스태프)</button>' +
       '</div>' +
-      '<div class="t-pin"><input type="password" inputmode="numeric" maxlength="12" placeholder="스태프 비밀번호"><button type="button">확인</button></div>' +
       '<div class="t-checkmsg"></div>' +
       '<p class="t-notice">' + CFG.noticeLines.map(esc).join('<br>') + '</p>';
     el.querySelector('.t-qr').innerHTML = qrSVG(verifyURL);
@@ -553,7 +548,6 @@ function applyCheckins(seats){
       state.innerHTML = '<b>입장 완료</b> · ' + fmtTs(hit.ts);
       btn.style.display = 'none';
       art.querySelector('.t-usedts').textContent = fmtTs(hit.ts) + ' 입장';
-      var pin = art.querySelector('.t-pin'); if (pin) pin.classList.remove('show');
     } else {
       art.classList.remove('used');
       state.textContent = '미입장';
@@ -562,7 +556,7 @@ function applyCheckins(seats){
   }
 }
 function hideCheckUI(){
-  var els = document.querySelectorAll('#tickets .t-check, #tickets .t-pin, #tickets .t-checkmsg');
+  var els = document.querySelectorAll('#tickets .t-check, #tickets .t-checkmsg');
   for (var i = 0; i < els.length; i++) els[i].style.display = 'none';
 }
 function pollStatus(){
@@ -586,40 +580,24 @@ function stopStatusPoll(){
 }
 window.addEventListener('focus', function(){ if (curPerson) pollStatus(); });
 
-/* 스태프 입장 확인 버튼 (관람객 화면) — 비밀번호를 매번 입력 */
+/* 스태프 입장 확인 버튼 (관람객 화면) — 비밀번호 없이, 확인 후 즉시 처리.
+   취소는 스태프만(verify.html 스태프 모드 · 관리자 현황판) 가능. */
 $('#tickets').addEventListener('click', function(ev){
   var t = ev.target;
-  if (t.classList.contains('t-staffbtn')) {
-    var art = t.closest('.ticket');
-    var pin = art.querySelector('.t-pin');
-    pin.classList.toggle('show');
-    if (pin.classList.contains('show')) pin.querySelector('input').focus();
-    return;
-  }
-  if (t.tagName === 'BUTTON' && t.closest('.t-pin')) {
-    doStaffCheckin(t.closest('.ticket'));
-  }
+  if (t.classList.contains('t-staffbtn')) doStaffCheckin(t.closest('.ticket'), t);
 });
-$('#tickets').addEventListener('keydown', function(ev){
-  if (ev.key === 'Enter' && ev.target.closest && ev.target.closest('.t-pin')) {
-    ev.preventDefault();
-    doStaffCheckin(ev.target.closest('.ticket'));
-  }
-});
-function doStaffCheckin(art){
-  var pin = art.querySelector('.t-pin'), inp = pin.querySelector('input');
+function doStaffCheckin(art, btn){
   var msg = art.querySelector('.t-checkmsg'), row = art.querySelector('.t-check');
   msg.classList.remove('show');
-  var pw = inp.value.trim();
-  if (!pw) { msg.textContent = '스태프 비밀번호를 입력해 주세요.'; msg.classList.add('show'); return; }
-  var btn = pin.querySelector('button'); btn.disabled = true;
-  apiCheckin({ action: 'set', pw: pw, code: curPerson.c, z: row.dataset.z, s: row.dataset.s, on: true })
+  var seatLabel = row.dataset.z + ' ' + row.dataset.s;
+  if (!window.confirm(seatLabel + ' — 입장 처리할까요?\n처리하면 티켓이 회색으로 바뀌며, 취소는 스태프만 할 수 있습니다.')) return;
+  btn.disabled = true;
+  apiCheckin({ action: 'set', code: curPerson.c, z: row.dataset.z, s: row.dataset.s, on: true })
     .then(function(j){
-      inp.value = '';
       applyCheckins([{ z: row.dataset.z, s: row.dataset.s, ts: j.ts }]);
       pollStatus();
     }).catch(function(e){
-      msg.textContent = e.status === 401 ? '비밀번호가 올바르지 않습니다.' : apiErrMsg(e);
+      msg.textContent = '처리 실패: ' + apiErrMsg(e);
       msg.classList.add('show');
     }).finally(function(){ btn.disabled = false; });
 }

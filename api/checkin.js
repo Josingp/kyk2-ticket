@@ -44,6 +44,24 @@ module.exports = async (req, res) => {
       return;
     }
 
+    /* ---- 입장 처리(on) — 비밀번호 불필요.
+       유효한 확인코드 소지 = 본인 티켓 증명이며, 처리는 본인에게 불리한
+       방향(사용 처리)이라 위조 유인이 없음. 취소는 아래에서 비밀번호 필요. ---- */
+    if (body.action === 'set' && body.on) {
+      if (!(await softLimit(req, 900))) { res.status(429).json({ error: 'too_many' }); return; }
+      const code = normCode(body.code), z = norm(body.z), s = norm(body.s);
+      if (code.length < 8 || !z || !s) { res.status(400).json({ error: 'bad_seat' }); return; }
+      const roster = await getRoster(ev);
+      if (!roster || !roster.people) { res.status(404).json({ error: 'no_roster' }); return; }
+      const person = roster.people.find(p => normCode(p.c) === code);
+      const valid = person && (person.t || []).some(tk => norm(tk.z) === z && norm(tk.s) === s);
+      if (!valid) { res.status(404).json({ error: 'unknown_seat' }); return; }
+      const ts = new Date().toISOString();
+      await redis(['HSET', K, person.c + '|' + z + '|' + s, ts]);
+      res.status(200).json({ ok: true, ts });
+      return;
+    }
+
     /* ---- 이하 스태프/관리자 (비밀번호) ---- */
     if (await pwBlocked(req)) { res.status(429).json({ error: 'too_many_attempts' }); return; }
     if (!checkPw(body.pw)) { await notePwFail(req); res.status(401).json({ error: 'unauthorized' }); return; }
@@ -56,6 +74,7 @@ module.exports = async (req, res) => {
       return;
     }
 
+    /* ---- 입장 취소(off) — 스태프/관리자만 ---- */
     if (body.action === 'set') {
       const code = normCode(body.code), z = norm(body.z), s = norm(body.s);
       if (code.length < 8 || !z || !s) { res.status(400).json({ error: 'bad_seat' }); return; }
@@ -64,15 +83,8 @@ module.exports = async (req, res) => {
       const person = roster.people.find(p => normCode(p.c) === code);
       const valid = person && (person.t || []).some(tk => norm(tk.z) === z && norm(tk.s) === s);
       if (!valid) { res.status(404).json({ error: 'unknown_seat' }); return; }
-      const field = person.c + '|' + z + '|' + s;
-      if (body.on) {
-        const ts = new Date().toISOString();
-        await redis(['HSET', K, field, ts]);
-        res.status(200).json({ ok: true, ts });
-      } else {
-        await redis(['HDEL', K, field]);
-        res.status(200).json({ ok: true, ts: null });
-      }
+      await redis(['HDEL', K, person.c + '|' + z + '|' + s]);
+      res.status(200).json({ ok: true, ts: null });
       return;
     }
 
