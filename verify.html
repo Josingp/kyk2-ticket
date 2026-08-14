@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>티켓 검증 · 신인감독 김연경2</title>
+<link rel="icon" href="assets/logo.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+@font-face{font-family:'GmarketSans';font-weight:700;font-display:swap;
+  src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2001@1.1/GmarketSansBold.woff') format('woff')}
+:root{--orange:#e97132;--navy:#1b1760;--navy-deep:#0e0b3d;
+  --disp:'GmarketSans','Pretendard',sans-serif;--body:'Pretendard',sans-serif}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--body);background:var(--navy-deep);color:#fff;min-height:100dvh;
+  padding:max(24px,env(safe-area-inset-top)) 16px 48px;
+  background-image:radial-gradient(120% 60% at 50% -10%, #2a2380 0%, var(--navy-deep) 62%)}
+.wrap{max-width:420px;margin:0 auto}
+.head{text-align:center;margin-bottom:20px}
+.head img{width:86px}
+.head h1{font:700 18px var(--disp);margin-top:10px}
+.head p{font-size:12.5px;color:#a4a0cf;margin-top:6px}
+.card{background:#fff;color:#26243f;border-radius:18px;padding:22px 20px;box-shadow:0 16px 44px rgba(5,3,30,.5)}
+label{display:block;font-size:12.5px;font-weight:700;color:var(--navy);margin-bottom:7px}
+input{width:100%;border:1.5px solid #dcd9ea;border-radius:12px;padding:13px 14px;
+  font:700 18px var(--disp);letter-spacing:.08em;color:#221f3d;background:#fbfaff;outline:none;text-transform:uppercase}
+input:focus-visible{border-color:var(--orange);box-shadow:0 0 0 3px rgba(233,113,50,.18)}
+button{width:100%;margin-top:14px;border:0;border-radius:12px;padding:14px;background:var(--navy);
+  color:#fff;font:700 15px var(--disp);cursor:pointer}
+button:focus-visible{outline:3px solid var(--orange);outline-offset:2px}
+button:disabled{opacity:.5}
+#out{margin-top:18px;display:none;border-radius:18px;padding:22px 20px}
+#out.ok{display:block;background:#e9f8ee;color:#14522b;border:2px solid #2fa45c}
+#out.bad{display:block;background:#fdeeea;color:#7c1d10;border:2px solid #d84a2c}
+#out .big{font:700 19px var(--disp);display:flex;align-items:center;gap:8px}
+#out .name{font:700 30px var(--disp);color:var(--navy);margin-top:12px}
+#out ul{list-style:none;margin-top:8px}
+#out li{font:700 17px var(--disp);color:#26243f;padding:6px 0;border-bottom:1px dashed #bcd8c5}
+#out li:last-child{border-bottom:0}
+#out .hint{font-size:12.5px;margin-top:12px;line-height:1.6}
+.foot{margin-top:26px;text-align:center;color:#7672ab;font-size:11.5px;line-height:1.7}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <img src="assets/logo.png" alt="">
+    <h1>스태프용 티켓 검증</h1>
+    <p>관람객 티켓의 QR을 스캔했거나, 티켓 하단의 확인코드를 입력하세요.</p>
+  </div>
+
+  <div class="card">
+    <form id="form" autocomplete="off">
+      <label for="inCode">확인코드 (8자리)</label>
+      <input id="inCode" placeholder="예) 5VD7-2ZR4" maxlength="9" autocapitalize="characters" spellcheck="false">
+      <button id="btn" type="submit">검증하기</button>
+    </form>
+  </div>
+
+  <div id="out" role="status"></div>
+
+  <p class="foot">이 페이지의 정보와 관람객 화면의 <b>이름·구역·좌석·코드</b>가 모두 일치하고,<br>관람객 화면의 시계가 실시간으로 움직이면 정상 티켓입니다.</p>
+</div>
+
+<script src="assets/config.js"></script>
+<script src="assets/ticket-crypto.js"></script>
+<script>
+(function(){
+'use strict';
+var CFG = window.TICKET_CONFIG, T = window.TCrypto;
+var $ = function(s){ return document.querySelector(s); };
+var DB = null, dbErr = null;
+var ready = fetch('data/db.json?v=' + Date.now())
+  .then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); })
+  .then(function(j){ DB = j; })
+  .catch(function(e){ dbErr = e; });
+
+function esc(s){ var d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+function zoneText(z){ z=String(z||'').trim(); return /구역/.test(z)?z:z+' 구역'; }
+function seatText(s){ s=String(s||'').trim(); return /좌석/.test(s)?s:s+' 좌석'; }
+
+function show(ok, html){
+  var o = $('#out'); o.className = ok ? 'ok' : 'bad'; o.innerHTML = html;
+}
+function check(codeRaw){
+  var code = T.normCode(codeRaw);
+  if (code.length < 8){ show(false, '<div class="big">✕ 코드 8자리를 입력하세요</div>'); return; }
+  var btn = $('#btn'); btn.disabled = true;
+  ready.then(function(){
+    if (dbErr || !DB) throw 'db';
+    return T.deriveVerify(code, CFG);
+  }).then(function(d){
+    var box = DB.verify && DB.verify[d.id];
+    if (!box) throw 0;
+    return T.decryptJSON(d.key, box);
+  }).then(function(p){
+    var seats = p.t.map(function(tk){
+      return '<li>' + esc(zoneText(tk.z)) + ' · ' + esc(seatText(tk.s)) + '</li>';
+    }).join('');
+    show(true,
+      '<div class="big">✔ 정상 발권된 티켓</div>' +
+      '<div class="name">' + esc(p.n) + '</div>' +
+      '<ul>' + seats + '</ul>' +
+      '<div class="hint">관람객 화면의 이름·좌석·코드(<b>' + T.fmtCode(code) + '</b>)와 일치하는지, 시계가 움직이는지 확인하세요.</div>');
+  }).catch(function(e){
+    if (e === 'db') show(false, '<div class="big">✕ 데이터 로드 실패</div><div class="hint">네트워크 연결을 확인한 뒤 새로고침해 주세요.</div>');
+    else show(false, '<div class="big">✕ 등록되지 않은 코드</div><div class="hint">발권된 적 없는 코드입니다. <b>위조 티켓일 수 있으니</b> 명단(스태프 확인용 엑셀)과 대조해 주세요.</div>');
+  }).finally(function(){ btn.disabled = false; });
+}
+
+$('#form').addEventListener('submit', function(ev){ ev.preventDefault(); check($('#inCode').value); });
+
+/* QR 링크(?c=코드) 자동 검증 */
+var c = new URLSearchParams(location.search).get('c');
+if (c){ $('#inCode').value = T.fmtCode(c); check(c); }
+})();
+</script>
+</body>
+</html>

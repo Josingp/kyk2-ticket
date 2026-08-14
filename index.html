@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>신인감독 김연경2 · 모바일 초대 티켓</title>
+<link rel="icon" href="assets/logo.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+@font-face{font-family:'GmarketSans';font-weight:500;font-display:swap;
+  src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2001@1.1/GmarketSansMedium.woff') format('woff')}
+@font-face{font-family:'GmarketSans';font-weight:700;font-display:swap;
+  src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2001@1.1/GmarketSansBold.woff') format('woff')}
+
+:root{
+  --orange:#e97132; --orange-deep:#c85a1e;
+  --navy:#1b1760;  --navy-deep:#0e0b3d; --navy-ink:#131048;
+  --paper:#fff; --paper-dim:#f6f4ef;
+  --disp:'GmarketSans','Pretendard',sans-serif;
+  --body:'Pretendard',-apple-system,sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  font-family:var(--body); color:var(--paper); background:var(--navy-deep);
+  background-image:radial-gradient(120% 60% at 50% -10%, #2a2380 0%, var(--navy-deep) 62%);
+  min-height:100dvh; padding:max(20px,env(safe-area-inset-top)) 16px 48px;
+}
+.wrap{max-width:420px;margin:0 auto}
+
+/* ---------- 상단 ---------- */
+.brand{text-align:center;padding:6px 0 22px}
+.brand img{width:118px;height:auto;filter:drop-shadow(0 6px 18px rgba(0,0,0,.45))}
+.brand h1{font-family:var(--disp);font-weight:700;font-size:21px;letter-spacing:-.01em;margin-top:12px}
+.brand .sub{color:var(--orange);font-family:var(--disp);font-weight:700;font-size:13px;letter-spacing:.14em;margin-top:5px}
+.brand .info{color:#b9b6dd;font-size:13px;margin-top:9px;letter-spacing:.01em}
+
+/* ---------- 조회 폼 ---------- */
+.card{background:var(--paper);color:#26243f;border-radius:20px;padding:26px 22px 24px;
+  box-shadow:0 18px 50px rgba(5,3,30,.5)}
+.card h2{font-family:var(--disp);font-weight:700;font-size:16px;color:var(--navy)}
+.card p.desc{font-size:13px;color:#6d6a8a;margin-top:6px;line-height:1.55}
+.field{margin-top:16px}
+.field label{display:block;font-size:12.5px;font-weight:700;color:var(--navy);margin-bottom:7px}
+.field input{width:100%;border:1.5px solid #dcd9ea;border-radius:12px;padding:13px 14px;
+  font:600 16px var(--body);color:#221f3d;background:#fbfaff;outline:none;
+  transition:border-color .15s, box-shadow .15s}
+.field input:focus-visible{border-color:var(--orange);box-shadow:0 0 0 3px rgba(233,113,50,.18)}
+button.primary{width:100%;margin-top:20px;border:0;border-radius:13px;padding:15px;
+  background:var(--orange);color:#fff;font:700 16px var(--disp);letter-spacing:.02em;cursor:pointer;
+  transition:transform .08s, background .15s}
+button.primary:active{transform:scale(.985)}
+button.primary:disabled{background:#e0ab8b;cursor:default}
+button.primary:focus-visible{outline:3px solid var(--navy);outline-offset:2px}
+.msg{margin-top:13px;font-size:13px;line-height:1.5;color:#c2401d;display:none}
+.msg.show{display:block}
+
+/* ---------- 결과 ---------- */
+#result{display:none}
+.hello{font-size:15px;line-height:1.6;text-align:center;color:#dcdaf2;margin-bottom:6px}
+.hello b{color:#fff}
+.live-note{font-size:12.5px;color:#a4a0cf;text-align:center;line-height:1.6;margin-bottom:18px}
+.live-note b{color:var(--orange)}
+
+/* ---------- 티켓 ---------- */
+.ticket{position:relative;overflow:hidden;background:var(--orange);border-radius:22px;
+  padding:24px 18px 16px;margin-bottom:22px;box-shadow:0 20px 55px rgba(5,3,30,.55);
+  isolation:isolate}
+.ticket .sheen{position:absolute;inset:-30%;z-index:5;pointer-events:none;
+  background:linear-gradient(115deg,transparent 43%,rgba(255,255,255,.34) 50%,transparent 57%);
+  transform:translateX(-130%);animation:sweep 3.4s ease-in-out infinite}
+@keyframes sweep{0%{transform:translateX(-130%)}58%{transform:translateX(130%)}100%{transform:translateX(130%)}}
+.t-chip{position:absolute;top:14px;right:14px;z-index:4;background:rgba(255,255,255,.92);
+  color:var(--navy);font:700 11.5px var(--disp);padding:5px 10px;border-radius:99px}
+.t-logo{display:block;width:158px;margin:2px auto 18px;
+  filter:drop-shadow(0 4px 10px rgba(120,45,0,.28))}
+.t-navy{position:relative;overflow:hidden;background:var(--navy);border-radius:16px;
+  padding:24px 16px 26px;text-align:center}
+.t-wm{position:absolute;left:-40%;top:-30%;width:180%;height:160%;z-index:0;
+  transform:rotate(-16deg);color:rgba(255,255,255,.075);
+  font:700 13px/2.3 var(--disp);letter-spacing:.12em;white-space:pre-wrap;word-break:break-all;
+  pointer-events:none;user-select:none}
+.t-navy>*:not(.t-wm){position:relative;z-index:1}
+.t-name{font-family:var(--disp);font-weight:700;color:#fff;font-size:38px;letter-spacing:.02em}
+.t-rule{width:64px;height:4px;background:var(--orange);border-radius:2px;margin:15px auto 17px}
+.t-zone{font-family:var(--disp);font-weight:700;color:#fff;font-size:27px}
+.t-seat{font-family:var(--disp);font-weight:700;color:#fff;font-size:27px;margin-top:6px}
+.t-seat.small,.t-zone.small{font-size:21px}
+.t-grade{display:inline-block;margin-bottom:12px;background:var(--orange);color:#fff;
+  font:700 12px var(--disp);padding:5px 12px;border-radius:99px;letter-spacing:.08em}
+
+/* live strip */
+.t-live{display:flex;align-items:center;gap:14px;background:#fff;border-radius:14px;
+  margin-top:14px;padding:12px 14px}
+.t-qr{flex:0 0 auto;width:86px;height:86px;border-radius:8px;overflow:hidden;background:#fff}
+.t-qr svg{display:block;width:100%;height:100%}
+.t-meta{flex:1;min-width:0;color:var(--navy)}
+.t-livehead{display:flex;align-items:center;gap:6px;font:700 11px var(--disp);
+  color:var(--orange-deep);letter-spacing:.18em}
+.t-livehead .dot{width:7px;height:7px;border-radius:50%;background:#e5401f;animation:pulse 1.1s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.75)}}
+.t-clock{font:700 27px/1.1 var(--disp);letter-spacing:.03em;margin-top:4px;font-variant-numeric:tabular-nums}
+.t-date{font-size:12px;color:#5a568a;margin-top:3px}
+.t-code{margin-top:7px;font-size:11.5px;color:#5a568a}
+.t-code b{font:700 13px var(--disp);color:var(--navy);letter-spacing:.06em}
+.t-notice{margin:13px 4px 4px;color:#fff;font-size:10.5px;line-height:1.65;opacity:.95;
+  text-align:left;word-break:keep-all}
+
+.again{display:block;width:100%;margin-top:4px;background:none;border:1.5px solid #45418c;
+  color:#c9c6ee;border-radius:13px;padding:13px;font:600 14px var(--body);cursor:pointer}
+.again:focus-visible{outline:3px solid var(--orange);outline-offset:2px}
+
+footer{margin-top:34px;text-align:center;color:#7672ab;font-size:11.5px;line-height:1.7}
+
+@media (prefers-reduced-motion:reduce){
+  .ticket .sheen{animation:none;display:none}
+  .t-livehead .dot{animation:none}
+}
+@media (max-width:359px){
+  .t-name{font-size:32px}.t-zone,.t-seat{font-size:23px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="brand">
+    <img src="assets/logo.png" alt="신인감독 김연경2 로고">
+    <h1 id="evName"></h1>
+    <div class="sub" id="evSub"></div>
+    <div class="info" id="evInfo"></div>
+  </header>
+
+  <!-- 조회 -->
+  <section class="card" id="lookup">
+    <h2>초대 티켓 확인</h2>
+    <p class="desc">초대 안내를 받으신 <b>이름</b>과 <b>연락처 뒤 4자리</b>를 입력하면 티켓이 표시됩니다.</p>
+    <form id="form" autocomplete="off">
+      <div class="field">
+        <label for="inName">이름</label>
+        <input id="inName" type="text" placeholder="예) 홍길동" required autocomplete="name">
+      </div>
+      <div class="field">
+        <label for="inPhone">연락처 뒤 4자리</label>
+        <input id="inPhone" type="text" inputmode="numeric" pattern="\d*" maxlength="4" placeholder="예) 5678" required>
+      </div>
+      <button class="primary" id="btnGo" type="submit">티켓 확인</button>
+      <p class="msg" id="msg"></p>
+    </form>
+  </section>
+
+  <!-- 결과 -->
+  <section id="result">
+    <p class="hello" id="hello"></p>
+    <p class="live-note">입장 시 캡처 화면이 아닌 <b>실시간 화면</b>을 제시해 주세요.<br>(초 단위 시계가 움직여야 유효한 티켓입니다)</p>
+    <div id="tickets"></div>
+    <button class="again" id="btnAgain" type="button">다른 정보로 조회</button>
+  </section>
+
+  <footer>
+    문의는 초대 안내를 드린 담당자에게 부탁드립니다.<br>
+    ⓒ 팬엔터테인먼트 · 신인감독 김연경2
+  </footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+<script src="assets/config.js"></script>
+<script src="assets/ticket-crypto.js"></script>
+<script>
+(function(){
+'use strict';
+var CFG = window.TICKET_CONFIG, T = window.TCrypto;
+var $ = function(s){ return document.querySelector(s); };
+
+/* 상단 이벤트 정보 */
+$('#evName').textContent = CFG.eventName;
+$('#evSub').textContent  = CFG.eventSub;
+$('#evInfo').textContent = CFG.eventInfo;
+document.title = CFG.eventName + ' · 모바일 초대 티켓';
+
+/* DB 로드 */
+var DB = null, dbErr = null;
+fetch('data/db.json?v=' + Date.now())
+  .then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); })
+  .then(function(j){ DB = j; })
+  .catch(function(e){ dbErr = e; });
+
+/* 표기 보정 */
+function zoneText(z){ z = String(z||'').trim(); return /구역/.test(z) ? z : z + ' 구역'; }
+function seatText(s){ s = String(s||'').trim(); return /좌석/.test(s) ? s : s + ' 좌석'; }
+function esc(s){ var d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+/* 실시간 시계 (Asia/Seoul 고정) */
+var fmtTime = new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'});
+var fmtDate = new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit',weekday:'short'});
+var wmName = '';
+function tick(){
+  var now = new Date();
+  var t = fmtTime.format(now), d = fmtDate.format(now);
+  var clocks = document.querySelectorAll('.js-clock');
+  for (var i=0;i<clocks.length;i++) clocks[i].textContent = t;
+  var dates = document.querySelectorAll('.js-date');
+  for (i=0;i<dates.length;i++) dates[i].textContent = d + ' KST';
+  var wms = document.querySelectorAll('.t-wm');
+  if (wms.length){
+    var unit = wmName + ' \u00b7 ' + t + '   ';
+    var line = ''; for (i=0;i<7;i++) line += unit;
+    for (i=0;i<wms.length;i++) wms[i].textContent = line;
+  }
+}
+setInterval(tick, 250);
+
+/* QR (SVG — 외부 이미지/베이스64 없음) */
+function qrSVG(text){
+  var q = qrcode(0, 'M'); q.addData(text); q.make();
+  return q.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+}
+
+/* 티켓 렌더 */
+function render(person){
+  wmName = person.n;
+  $('#hello').innerHTML = '<b>' + esc(person.n) + '</b>님, 초대 티켓 <b>' + person.t.length + '매</b>가 확인되었습니다.';
+  var verifyURL = new URL('verify.html?c=' + person.c, location.href).href;
+  var host = $('#tickets'); host.innerHTML = '';
+  person.t.forEach(function(tk, i){
+    var z = zoneText(tk.z), s = seatText(tk.s);
+    var small = (z.length > 9 || s.length > 11) ? ' small' : '';
+    var el = document.createElement('article');
+    el.className = 'ticket';
+    el.innerHTML =
+      '<div class="sheen"></div>' +
+      (person.t.length > 1 ? '<div class="t-chip">' + (i+1) + ' / ' + person.t.length + '</div>' : '') +
+      '<img class="t-logo" src="assets/logo.png" alt="">' +
+      '<div class="t-navy">' +
+        '<div class="t-wm" aria-hidden="true"></div>' +
+        (tk.g ? '<div class="t-grade">' + esc(tk.g) + '</div>' : '') +
+        '<div class="t-name">' + esc(person.n) + '</div>' +
+        '<div class="t-rule"></div>' +
+        '<div class="t-zone' + small + '">' + esc(z) + '</div>' +
+        '<div class="t-seat' + small + '">' + esc(s) + '</div>' +
+      '</div>' +
+      '<div class="t-live">' +
+        '<div class="t-qr" aria-label="스태프 검증용 QR"></div>' +
+        '<div class="t-meta">' +
+          '<div class="t-livehead"><span class="dot"></span>LIVE</div>' +
+          '<div class="t-clock js-clock">--:--:--</div>' +
+          '<div class="t-date js-date"></div>' +
+          '<div class="t-code">확인코드 <b>' + T.fmtCode(person.c) + '</b></div>' +
+        '</div>' +
+      '</div>' +
+      '<p class="t-notice">' + CFG.noticeLines.map(esc).join('<br>') + '</p>';
+    el.querySelector('.t-qr').innerHTML = qrSVG(verifyURL);
+    host.appendChild(el);
+  });
+  tick();
+  $('#lookup').style.display = 'none';
+  $('#result').style.display = 'block';
+  window.scrollTo({ top: 0 });
+}
+
+/* 조회 */
+function showMsg(t){ var m=$('#msg'); m.textContent=t; m.classList.add('show'); }
+$('#form').addEventListener('submit', function(ev){
+  ev.preventDefault();
+  $('#msg').classList.remove('show');
+  var name = $('#inName').value, phone = $('#inPhone').value;
+  if (!T.normName(name)) return showMsg('이름을 입력해 주세요.');
+  if (T.last4(phone).length < 4) return showMsg('연락처 뒤 4자리를 숫자로 입력해 주세요.');
+  if (dbErr) return showMsg('티켓 데이터를 불러오지 못했습니다. 안내받은 주소로 다시 접속해 주세요.');
+  if (!DB) return showMsg('데이터를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.');
+  var btn = $('#btnGo'); btn.disabled = true; btn.textContent = '확인 중…';
+  T.deriveRecord(name, phone, CFG).then(function(d){
+    var box = DB.records && DB.records[d.id];
+    if (!box) throw 0;
+    return T.decryptJSON(d.key, box);
+  }).then(function(person){
+    render(person);
+  }).catch(function(){
+    showMsg('입력하신 정보와 일치하는 티켓이 없습니다. 초대 안내를 받은 이름과 연락처인지 확인해 주세요.');
+  }).finally(function(){
+    btn.disabled = false; btn.textContent = '티켓 확인';
+  });
+});
+
+$('#btnAgain').addEventListener('click', function(){
+  $('#result').style.display = 'none';
+  $('#tickets').innerHTML = '';
+  $('#lookup').style.display = 'block';
+  $('#inPhone').value = '';
+});
+})();
+</script>
+</body>
+</html>

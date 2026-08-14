@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>DB 생성 도구 · 신인감독 김연경2</title>
+<link rel="icon" href="assets/logo.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+:root{--orange:#e97132;--navy:#1b1760;--body:'Pretendard',sans-serif}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--body);background:#f2f1f7;color:#26243f;min-height:100dvh;padding:34px 16px 60px}
+.wrap{max-width:640px;margin:0 auto}
+h1{font-size:21px;color:var(--navy);display:flex;align-items:center;gap:10px}
+h1 img{width:40px}
+.lead{font-size:13.5px;color:#66627f;margin-top:8px;line-height:1.7}
+.step{background:#fff;border-radius:16px;padding:22px 20px;margin-top:16px;box-shadow:0 6px 22px rgba(20,15,70,.07)}
+.step h2{font-size:15px;color:var(--navy);margin-bottom:8px}
+.step p{font-size:13px;color:#66627f;line-height:1.7}
+.step code{background:#eeecf7;border-radius:6px;padding:2px 7px;font-size:12px;color:var(--navy)}
+.drop{margin-top:14px;border:2px dashed #c3bfe0;border-radius:14px;padding:34px 16px;text-align:center;
+  color:#7b77a0;font-size:14px;cursor:pointer;transition:.15s;background:#fbfaff}
+.drop.hover{border-color:var(--orange);color:var(--orange);background:#fff6f0}
+.drop input{display:none}
+.bar{height:9px;background:#e7e5f2;border-radius:99px;margin-top:16px;overflow:hidden;display:none}
+.bar i{display:block;height:100%;width:0;background:var(--orange);transition:width .2s}
+.stat{font-size:13px;color:#66627f;margin-top:8px;display:none}
+.warn{display:none;margin-top:14px;background:#fff7ed;border:1.5px solid #f0b27d;border-radius:12px;
+  padding:14px 16px;font-size:12.5px;color:#8a4b12;line-height:1.7;white-space:pre-wrap}
+.err{display:none;margin-top:14px;background:#fdeeea;border:1.5px solid #d84a2c;border-radius:12px;
+  padding:14px 16px;font-size:12.5px;color:#7c1d10;line-height:1.7;white-space:pre-wrap}
+.done{display:none;margin-top:14px;background:#e9f8ee;border:1.5px solid #2fa45c;border-radius:12px;padding:16px;font-size:13.5px;color:#14522b;line-height:1.8}
+.btns{display:none;gap:10px;margin-top:14px;flex-wrap:wrap}
+.btns button{flex:1 1 220px;border:0;border-radius:12px;padding:14px;font:700 14px var(--body);cursor:pointer}
+#dlDb{background:var(--navy);color:#fff}
+#dlStaff{background:var(--orange);color:#fff}
+ol{margin:10px 0 0 18px;font-size:13px;color:#4c4870;line-height:1.9}
+.note{margin-top:26px;font-size:12px;color:#8985ab;line-height:1.8}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1><img src="assets/logo.png" alt="">티켓 DB 생성 도구 (운영자용)</h1>
+  <p class="lead">명단 엑셀을 이 페이지에 올리면 <b>암호화된 db.json</b>과 <b>스태프 확인용 명단</b>이 만들어집니다.
+  모든 처리는 <b>이 브라우저 안에서만</b> 이루어지며, 어떤 서버로도 명단이 전송되지 않습니다.</p>
+
+  <div class="step">
+    <h2>1. 명단 엑셀 준비</h2>
+    <p>첫 행이 제목인 엑셀(.xlsx)로, 열 이름은 <code>이름</code> <code>연락처</code> <code>구역</code> <code>좌석</code> (선택: <code>등급</code>) 을 사용하세요.
+    같은 사람의 좌석이 여러 개면 행을 여러 줄로 나눠 적으면 됩니다. 양식: <code>tools/명단_양식.xlsx</code></p>
+  </div>
+
+  <div class="step">
+    <h2>2. 변환</h2>
+    <label class="drop" id="drop">
+      명단 엑셀(.xlsx)을 여기로 드래그하거나 클릭해서 선택
+      <input type="file" id="file" accept=".xlsx,.xls">
+    </label>
+    <div class="bar" id="bar"><i id="barIn"></i></div>
+    <div class="stat" id="stat"></div>
+    <div class="err" id="err"></div>
+    <div class="warn" id="warn"></div>
+    <div class="done" id="done"></div>
+    <div class="btns" id="btns">
+      <button id="dlDb" type="button">db.json 내려받기</button>
+      <button id="dlStaff" type="button">스태프 확인용 명단(.xlsx) 내려받기</button>
+    </div>
+  </div>
+
+  <div class="step">
+    <h2>3. 적용</h2>
+    <ol>
+      <li>내려받은 <code>db.json</code>으로 GitHub 저장소의 <code>data/db.json</code>을 교체(업로드)합니다.</li>
+      <li>배포가 갱신되면(약 1분) 관람객이 이름+연락처 뒤 4자리로 티켓을 조회할 수 있습니다.</li>
+      <li><code>스태프 확인용 명단</code>은 입장 스태프에게만 전달하세요. 확인코드가 들어 있습니다.</li>
+    </ol>
+  </div>
+
+  <p class="note">※ 원본 명단 엑셀과 스태프 확인용 명단은 개인정보가 담겨 있으니 <b>GitHub에 올리지 마세요</b> (.gitignore로 기본 차단됨).<br>
+  ※ 동명이인이 연락처 뒤 4자리까지 같은 경우 자동으로 감지해 알려드립니다.</p>
+</div>
+
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="assets/config.js"></script>
+<script src="assets/ticket-crypto.js"></script>
+<script>
+(function(){
+'use strict';
+var CFG = window.TICKET_CONFIG, T = window.TCrypto;
+var $ = function(s){ return document.querySelector(s); };
+var dbBlobURL = null, staffBook = null;
+
+/* ---------- 파일 입력 ---------- */
+var drop = $('#drop');
+['dragover','dragenter'].forEach(function(ev){
+  drop.addEventListener(ev, function(e){ e.preventDefault(); drop.classList.add('hover'); });
+});
+['dragleave','drop'].forEach(function(ev){
+  drop.addEventListener(ev, function(e){ e.preventDefault(); drop.classList.remove('hover'); });
+});
+drop.addEventListener('drop', function(e){
+  var f = e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) handleFile(f);
+});
+$('#file').addEventListener('change', function(e){
+  if (e.target.files[0]) handleFile(e.target.files[0]);
+});
+
+function reset(){
+  ['err','warn','done'].forEach(function(id){ var el=$('#'+id); el.style.display='none'; el.textContent=''; });
+  $('#btns').style.display = 'none';
+  $('#bar').style.display = 'none'; $('#barIn').style.width = '0';
+  $('#stat').style.display = 'none';
+}
+function fail(msg){ var e=$('#err'); e.textContent = msg; e.style.display='block'; }
+
+/* ---------- 엑셀 파싱 ---------- */
+function parseSheet(wb){
+  var ws = wb.Sheets[wb.SheetNames[0]];
+  var aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+  // 제목 행 탐색 (상위 6행 내 '이름' + '연락처/전화' 포함 행)
+  var hi = -1, cols = {};
+  for (var r = 0; r < Math.min(aoa.length, 6); r++) {
+    var row = aoa[r].map(function(c){ return String(c).trim(); });
+    var m = {};
+    row.forEach(function(c, idx){
+      if (/^이\s*름$|^성\s*명$/.test(c)) m.name = idx;
+      else if (/연락처|전화|휴대폰|핸드폰/.test(c)) m.phone = idx;
+      else if (/구역/.test(c)) m.zone = idx;
+      else if (/좌석/.test(c)) m.seat = idx;
+      else if (/등급|비고|메모|VIP/i.test(c)) m.grade = idx;
+    });
+    if (m.name != null && m.phone != null) { hi = r; cols = m; break; }
+  }
+  if (hi < 0) throw new Error('제목 행을 찾지 못했습니다. 첫 행에 "이름, 연락처, 구역, 좌석" 열 이름이 있어야 합니다.');
+  if (cols.zone == null || cols.seat == null) throw new Error('"구역"과 "좌석" 열이 필요합니다.');
+
+  var rows = [], problems = [];
+  for (var i = hi + 1; i < aoa.length; i++) {
+    var a = aoa[i];
+    var name = String(a[cols.name] == null ? '' : a[cols.name]).trim();
+    if (!name) continue; // 빈 행 스킵
+    var phone = String(a[cols.phone] == null ? '' : a[cols.phone]).trim();
+    var zone  = String(a[cols.zone] == null ? '' : a[cols.zone]).trim();
+    var seat  = String(a[cols.seat] == null ? '' : a[cols.seat]).trim();
+    var grade = cols.grade != null ? String(a[cols.grade] == null ? '' : a[cols.grade]).trim() : '';
+    if (!phone && !zone && !seat) continue; // 안내문 등 주석성 행 무시
+    var ln = i + 1;
+    if (T.last4(phone).length < 4) { problems.push(ln + '행 (' + name + '): 연락처 숫자가 4자리 미만'); continue; }
+    if (!zone || !seat) { problems.push(ln + '행 (' + name + '): 구역/좌석 비어 있음'); continue; }
+    rows.push({ ln: ln, name: name, phone: phone, zone: zone, seat: seat, grade: grade });
+  }
+  return { rows: rows, problems: problems };
+}
+
+/* ---------- 변환 ---------- */
+async function handleFile(f){
+  reset();
+  var buf;
+  try { buf = await f.arrayBuffer(); } catch(e){ return fail('파일을 읽지 못했습니다.'); }
+  var parsed;
+  try { parsed = parseSheet(XLSX.read(buf, { type: 'array' })); }
+  catch(e){ return fail(e.message || '엑셀 형식을 해석하지 못했습니다.'); }
+
+  var rows = parsed.rows;
+  if (!rows.length) return fail('처리할 수 있는 행이 없습니다.' + (parsed.problems.length ? '\n- ' + parsed.problems.join('\n- ') : ''));
+
+  // 그룹핑 + 충돌 감지
+  var groups = new Map(), collisions = [];
+  rows.forEach(function(r){
+    var key = T.normName(r.name) + '|' + T.last4(r.phone);
+    if (!groups.has(key)) groups.set(key, { name: r.name, phone: r.phone, tickets: [], lns: [] });
+    var g = groups.get(key);
+    var pd = function(p){ return String(p).replace(/\D/g,''); };
+    if (pd(g.phone) !== pd(r.phone))
+      collisions.push(r.name + ': ' + g.lns[0] + '행(' + g.phone + ')과 ' + r.ln + '행(' + r.phone + ')의 이름+뒤4자리가 같지만 전체 번호가 다릅니다. 두 사람이 하나의 조회로 합쳐지니 확인이 필요합니다.');
+    g.tickets.push({ z: r.zone, s: r.seat, g: r.grade || undefined });
+    g.lns.push(r.ln);
+  });
+
+  // 암호화 (병렬 청크 + 진행률)
+  $('#bar').style.display = 'block';
+  $('#stat').style.display = 'block';
+  var db = { v: 1, built: new Date().toISOString(), records: {}, verify: {} };
+  var staffRows = [];
+  var entries = Array.from(groups.values());
+  var doneN = 0, total = entries.length;
+  var CHUNK = 12;
+  for (var i = 0; i < entries.length; i += CHUNK) {
+    var slice = entries.slice(i, i + CHUNK);
+    await Promise.all(slice.map(async function(g){
+      var code = T.makeCode(8);
+      var rec = await T.deriveRecord(g.name, g.phone, CFG);
+      db.records[rec.id] = await T.encryptJSON(rec.key, { n: g.name, c: code, t: g.tickets });
+      var ver = await T.deriveVerify(code, CFG);
+      db.verify[ver.id] = await T.encryptJSON(ver.key, { n: g.name, t: g.tickets });
+      g.tickets.forEach(function(tk){
+        staffRows.push([g.name, g.phone, tk.z, tk.s, T.fmtCode(code), tk.g || '']);
+      });
+      doneN++;
+      $('#barIn').style.width = Math.round(doneN / total * 100) + '%';
+      $('#stat').textContent = '암호화 중… ' + doneN + ' / ' + total + '명';
+    }));
+  }
+
+  // 결과물 준비
+  if (dbBlobURL) URL.revokeObjectURL(dbBlobURL);
+  dbBlobURL = URL.createObjectURL(new Blob([JSON.stringify(db, null, 1)], { type: 'application/json' }));
+
+  staffRows.sort(function(a, b){ return (a[2]+a[3]).localeCompare(b[2]+b[3], 'ko'); });
+  var aoa = [['이름','연락처','구역','좌석','확인코드','등급']].concat(staffRows);
+  var ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{wch:12},{wch:16},{wch:10},{wch:14},{wch:13},{wch:10}];
+  staffBook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(staffBook, ws, '입장확인');
+
+  // 요약 / 경고
+  var d = $('#done');
+  d.innerHTML = '✔ 변환 완료 — <b>' + total + '명 · 티켓 ' + rows.length + '매</b><br>아래 두 파일을 내려받아 3단계대로 적용하세요.';
+  d.style.display = 'block';
+  $('#btns').style.display = 'flex';
+  var warnMsgs = [];
+  if (collisions.length) warnMsgs.push('⚠ 이름+뒤4자리 중복:\n- ' + collisions.join('\n- '));
+  if (parsed.problems.length) warnMsgs.push('⚠ 건너뛴 행:\n- ' + parsed.problems.join('\n- '));
+  if (warnMsgs.length) { var w = $('#warn'); w.textContent = warnMsgs.join('\n\n'); w.style.display = 'block'; }
+  $('#stat').textContent = '완료 · ' + new Date().toLocaleTimeString('ko-KR');
+}
+
+/* ---------- 다운로드 ---------- */
+$('#dlDb').addEventListener('click', function(){
+  var a = document.createElement('a');
+  a.href = dbBlobURL; a.download = 'db.json'; a.click();
+});
+$('#dlStaff').addEventListener('click', function(){
+  XLSX.writeFile(staffBook, '스태프_확인용_명단.xlsx');
+});
+})();
+</script>
+</body>
+</html>
