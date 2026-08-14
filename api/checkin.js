@@ -61,7 +61,7 @@ module.exports = async (req, res) => {
       return;
     }
 
-    /* ---- 이하 스태프/관리자 (세션 토큰 또는 비밀번호) ---- */
+    /* ---- 이하 스태프/관리자 (세션 토큰[관리자·스태프] 또는 비밀번호) ---- */
     if (!checkSession(body.tk)) {
       if (await pwBlocked(req)) { res.status(429).json({ error: 'too_many_attempts' }); return; }
       if (!checkPw(body.pw)) { await notePwFail(req); res.status(401).json({ error: 'unauthorized' }); return; }

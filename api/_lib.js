@@ -99,27 +99,65 @@ function decryptStr(v) {
   } catch (e) { return null; }
 }
 
-/* ── 세션 토큰: 브라우저에 비밀번호 대신 만료형 토큰만 저장 (DATA_KEY 필요) ── */
-function makeSession(hours) {
+/* ── TOTP (RFC 6238) — Microsoft Authenticator 등 표준 인증앱 호환 ── */
+function b32decode(s) {
+  s = String(s || '').toUpperCase().replace(/[^A-Z2-7]/g, '');
+  const A = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  let bits = 0, val = 0; const out = [];
+  for (const ch of s) {
+    val = (val << 5) | A.indexOf(ch); bits += 5;
+    if (bits >= 8) { out.push((val >>> (bits - 8)) & 255); bits -= 8; }
+  }
+  return Buffer.from(out);
+}
+function totpAt(secretB32, tSec) {
+  const key = b32decode(secretB32);
+  const c = Math.floor(tSec / 30);
+  const buf = Buffer.alloc(8);
+  buf.writeUInt32BE(Math.floor(c / 4294967296), 0);
+  buf.writeUInt32BE(c >>> 0, 4);
+  const h = crypto.createHmac('sha1', key).update(buf).digest();
+  const o = h[19] & 15;
+  const n = (((h[o] & 127) << 24) | (h[o+1] << 16) | (h[o+2] << 8) | h[o+3]) % 1000000;
+  return String(n).padStart(6, '0');
+}
+function verifyTotp(code) {
+  const s = process.env.TOTP_SECRET;
+  if (!s) return false;
+  code = String(code || '').replace(/\D/g, '');
+  if (code.length !== 6) return false;
+  const now = Math.floor(Date.now() / 1000);
+  for (let w = -1; w <= 1; w++) {
+    const want = totpAt(s, now + w * 30);
+    if (want.length === code.length &&
+        crypto.timingSafeEqual(Buffer.from(want), Buffer.from(code))) return true;
+  }
+  return false;
+}
+/* OTP 강제 여부: TOTP_SECRET + DATA_KEY(세션용) 둘 다 있어야 활성화 */
+function totpOn() { return !!(process.env.TOTP_SECRET && dataKey()); }
+
+/* ── 역할 기반 세션 토큰: 'a'=관리자(명단 접근 가능) · 's'=스태프(입장 처리만) ── */
+function makeSession(hours, role) {
   const key = dataKey();
   if (!key) return null;
+  role = role === 's' ? 's' : 'a';
   const exp = Date.now() + (hours || 6) * 3600000;
-  const mac = crypto.createHmac('sha256', key).update('s' + exp).digest('hex').slice(0, 40);
-  return exp + '.' + mac;
+  const mac = crypto.createHmac('sha256', key).update(role + '|' + exp).digest('hex').slice(0, 40);
+  return role + '.' + exp + '.' + mac;
 }
 function checkSession(tok) {
   const key = dataKey();
-  if (!key || typeof tok !== 'string') return false;
-  const i = tok.indexOf('.');
-  if (i < 1) return false;
-  const exp = parseInt(tok.slice(0, i), 10);
-  if (!exp || Date.now() > exp) return false;
-  const want = crypto.createHmac('sha256', key).update('s' + exp).digest('hex').slice(0, 40);
-  const a = Buffer.from(tok.slice(i + 1)), b = Buffer.from(want);
-  return a.length === b.length && crypto.timingSafeEqual(a, b);
+  if (!key || typeof tok !== 'string') return null;
+  const p = tok.split('.');
+  if (p.length !== 3) return null;
+  const role = p[0], exp = parseInt(p[1], 10);
+  if ((role !== 'a' && role !== 's') || !exp || Date.now() > exp) return null;
+  const want = crypto.createHmac('sha256', key).update(role + '|' + exp).digest('hex').slice(0, 40);
+  const a = Buffer.from(p[2]), b = Buffer.from(want);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  return role;
 }
-/* 비밀번호 또는 세션 토큰 중 하나로 인증 */
-function authed(body) { return checkSession(body && body.tk) || checkPw(body && body.pw); }
 
 /* 서버 저장 명단 로드 (암호문이면 복호화) */
 async function getRoster(ev) {
@@ -188,4 +226,4 @@ function readBody(req) {
 
 module.exports = { redis, sanitizeEvent, checkPw, pwBlocked, notePwFail, softLimit, getRoster, readBody,
   getRosterCached, getDbCached, getHashCached, bustKey, bustEvent, memLimit,
-  encryptStr, decryptStr, dataKey, makeSession, checkSession, authed };
+  encryptStr, decryptStr, dataKey, makeSession, checkSession, totpAt, verifyTotp, totpOn };

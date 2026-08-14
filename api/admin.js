@@ -9,7 +9,7 @@
    - publish : 새 DB(암호문) + 명단을 Redis에 저장 → 즉시 반영
    ============================================================ */
 const { redis, sanitizeEvent, checkPw, pwBlocked, notePwFail, readBody, getRosterCached, bustEvent,
-  encryptStr, dataKey, makeSession, checkSession } = require('./_lib');
+  encryptStr, dataKey, makeSession, checkSession, verifyTotp, totpOn } = require('./_lib');
 
 const MAX_BYTES = 950000; // Upstash 요청 한도(1MB) 보호
 
@@ -20,18 +20,31 @@ module.exports = async (req, res) => {
   if (!ev) { res.status(400).json({ error: 'bad_event' }); return; }
 
   try {
-    if (!checkSession(body.tk)) {
+    /* 인증: 세션 토큰(역할 포함) 또는 비밀번호(+관리자 OTP) */
+    let role = checkSession(body.tk);
+    if (!role) {
       if (await pwBlocked(req)) { res.status(429).json({ error: 'too_many_attempts' }); return; }
       if (!checkPw(body.pw)) { await notePwFail(req); res.status(401).json({ error: 'unauthorized' }); return; }
+      if (body.scope === 'staff') role = 's';
+      else if (!totpOn()) role = 'a';
+      else if (verifyTotp(body.otp)) role = 'a';
+      else { await notePwFail(req); res.status(401).json({ error: 'otp_required' }); return; }
     }
+    const isAdmin = role === 'a';
 
     const K = 'tickets:' + ev;
 
     if (body.action === 'verify') {
-      /* DATA_KEY 설정 시 6시간짜리 세션 토큰 발급 → 브라우저에 비밀번호를 남기지 않음 */
-      res.status(200).json({ ok: true, session: makeSession(6), encrypted: !!dataKey() });
+      /* DATA_KEY 설정 시 세션 토큰 발급 → 브라우저에 비밀번호를 남기지 않음
+         관리자 6시간, 스태프 12시간(행사 당일 재로그인 최소화) */
+      res.status(200).json({ ok: true, role: role,
+        session: makeSession(isAdmin ? 6 : 12, role),
+        otpRequired: totpOn(), encrypted: !!dataKey() });
       return;
     }
+
+    /* 이하 명단·발행·파기는 관리자 전용 */
+    if (!isAdmin) { res.status(403).json({ error: 'forbidden' }); return; }
 
     if (body.action === 'roster') {
       const roster = await getRosterCached(ev, 5000);
