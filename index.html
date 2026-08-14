@@ -107,6 +107,32 @@ button.primary:focus-visible{outline:3px solid var(--navy);outline-offset:2px}
 .t-notice{margin:13px 4px 4px;color:#fff;font-size:10.5px;line-height:1.65;opacity:.95;
   text-align:left;word-break:keep-all}
 
+/* ---------- 좌석 위치 안내 ---------- */
+.card.guide{margin-bottom:22px}
+.card.guide h2{display:flex;align-items:baseline;gap:8px}
+.card.guide h2 small{font:700 11px var(--body);color:#8985ab;letter-spacing:.02em}
+.sg-map{margin-top:14px;border:1.5px solid #e7e4f3;border-radius:14px;overflow:hidden;background:#faf9fd}
+.sg-map svg{display:block;width:100%;height:auto}
+.sg-detail{margin-top:16px;border-top:1.5px solid #edeaf6;padding-top:14px}
+.sg-dh{display:flex;align-items:baseline;gap:8px}
+.sg-dh b{font:700 17px var(--disp);color:var(--navy)}
+.sg-dh span{font:700 11.5px var(--body);color:#8985ab}
+.sg-route{font-size:12.5px;color:#4c4870;margin-top:7px;line-height:1.65}
+.sg-route b{color:var(--orange-deep)}
+.sg-note{font-size:12px;color:#8a6d3b;background:#fff7ed;border:1px solid #f0d9b5;border-radius:8px;
+  padding:8px 10px;margin-top:8px;line-height:1.55}
+.sg-cap{margin-top:13px;text-align:center;font:700 11px var(--body);color:var(--orange-deep);letter-spacing:.08em}
+.sg-gridwrap{margin-top:7px;overflow-x:auto;padding-bottom:2px}
+.sg-grid{display:grid;gap:2px;align-items:center;width:max-content;margin:0 auto}
+.sg-rl{font:700 9.5px var(--body);color:#8985ab;padding-right:6px;text-align:right;white-space:nowrap}
+.sg-rl.on{color:var(--orange-deep)}
+.sg-seat{width:11px;height:11px;border-radius:3px;background:#e3e0f0}
+.sg-seat.none{background:transparent}
+.sg-seat.mine{background:var(--orange);color:#fff;font:800 7px/11px var(--body);text-align:center;
+  box-shadow:0 0 0 1.5px #fff,0 0 0 3px var(--orange)}
+.sg-dir{font-size:11px;color:#8985ab;margin-top:9px;text-align:center}
+.sg-my{font-size:12.5px;color:var(--navy);font-weight:700;margin-top:6px;text-align:center;word-break:keep-all}
+
 .again{display:block;width:100%;margin-top:4px;background:none;border:1.5px solid #45418c;
   color:#c9c6ee;border-radius:13px;padding:13px;font:600 14px var(--body);cursor:pointer}
 .again:focus-visible{outline:3px solid var(--orange);outline-offset:2px}
@@ -271,6 +297,7 @@ footer{margin-top:34px;text-align:center;color:#7672ab;font-size:11.5px;line-hei
     <p class="live-note">입장 시 캡처 화면이 아닌 <b>실시간 화면</b>을 제시해 주세요.<br>(초 단위 시계가 움직여야 유효한 티켓입니다)</p>
     <p class="geo" id="geoBadge"></p>
     <div id="tickets"></div>
+    <div class="card guide" id="seatGuide" style="display:none"></div>
     <button class="again" id="btnAgain" type="button">다른 정보로 조회</button>
   </section>
 
@@ -375,6 +402,7 @@ footer{margin-top:34px;text-align:center;color:#7672ab;font-size:11.5px;line-hei
 
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
 <script src="assets/config.js"></script>
+<script src="assets/venue-sk.js"></script>
 <script src="assets/ticket-crypto.js"></script>
 <script>
 (function(){
@@ -481,6 +509,7 @@ function render(person){
   refresh();
   startStatusPoll();
   initGeo();
+  buildSeatGuide(person);
   window.scrollTo({ top: 0 });
 }
 
@@ -513,6 +542,8 @@ $('#btnAgain').addEventListener('click', function(){
   curPerson = null;
   stopStatusPoll();
   $('#tickets').innerHTML = '';
+  $('#seatGuide').innerHTML = '';
+  $('#seatGuide').style.display = 'none';
   $('#inPhone').value = '';
   $('#geoBadge').className = 'geo';
   refresh();
@@ -628,6 +659,184 @@ function distM(la1, lo1, la2, lo2){
   var a = Math.sin((la2-la1)*r/2), b = Math.sin((lo2-lo1)*r/2);
   var h = a*a + Math.cos(la1*r) * Math.cos(la2*r) * b*b;
   return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+/* ==================== 좌석 위치 안내 (잠실학생체육관 도면) ==================== */
+function sgZoneId(z){ var m = String(z || '').match(/(\d{3})/); return m ? m[1] : null; }
+function sgRow(s){ var m = String(s || '').match(/(\d+)\s*열/); return m ? +m[1] : null; }
+function sgSeatNos(s){
+  var m = String(s || '').match(/(\d+)(?:\s*[~∼〜-]\s*(\d+))?\s*번/);
+  if (!m) return [];
+  var a = +m[1], b = m[2] ? +m[2] : a;
+  if (b < a){ var t = a; a = b; b = t; }
+  var out = [];
+  for (var n = a; n <= b && out.length < 40; n++) out.push(n);
+  return out;
+}
+function sgSeats(z){
+  if (z._seats) return z._seats;
+  z._seats = z.s.split(';').map(function(t){ var p = t.split(','); return { r: +p[0], c: +p[1], n: +p[2] }; });
+  return z._seats;
+}
+function sgCIdx(z, s){ return z.flip ? z.nC - 1 - s.c : s.c; }
+function sgRp(V, r, a){ var d = Math.PI / 180; return [V.cx + r * Math.cos(a * d), V.cy - r * Math.sin(a * d)]; }
+function sgArc(V, rr, a, sp, g){
+  g = (g === undefined) ? 0.9 : g;
+  var ri = rr[0], ro = rr[1], a0 = a - sp/2 + g, a1 = a + sp/2 - g;
+  var N = Math.max(6, Math.round(sp / 3)), p = [], i;
+  for (i = 0; i <= N; i++) p.push(sgRp(V, ro, a0 + (a1 - a0) * i / N));
+  for (i = N; i >= 0; i--) p.push(sgRp(V, ri, a0 + (a1 - a0) * i / N));
+  return 'M' + p.map(function(q){ return q[0].toFixed(1) + ' ' + q[1].toFixed(1); }).join('L') + 'Z';
+}
+function sgSeatPos(V, z, s){
+  var gm = 1.6, stepA = (z.sp - 2 * gm) / z.nC;
+  var padR = Math.min(6, (z.rr[1] - z.rr[0]) * 0.1);
+  var stepR = (z.rr[1] - z.rr[0] - 2 * padR) / z.nR;
+  return sgRp(V, z.rr[0] + padR + (s.r + 0.5) * stepR, z.a + z.sp/2 - gm - (sgCIdx(z, s) + 0.5) * stepA);
+}
+function sgRoute(V, z){
+  if (z.fl === '3층'){
+    var best = null, bd = 1e9;
+    V.gateNum.forEach(function(g){
+      var diff = ((g[1] - z.a) % 360 + 360) % 360;
+      var d = Math.min(diff, 360 - diff);
+      if (d < bd){ bd = d; best = g[0]; }
+    });
+    return '<b>메인 게이트(2층 로비)</b>로 입장 → 로비의 <b>' + best + '번 출입구</b> 계단으로 3층 이동 → ' + z.id + '구역';
+  }
+  return '<b>메인 게이트(2층 로비)</b>로 입장 → 로비에서 <b>' + z.id + '구역</b> 표지를 따라 이동 (2층은 로비와 같은 층)';
+}
+function sgOverviewSVG(V, found){
+  var s = '<svg viewBox="0 0 ' + V.vw + ' ' + V.vh + '" role="img" aria-label="' + esc(V.name) + ' 좌석 배치도">';
+  if (V.floorR) s += '<circle cx="' + V.cx + '" cy="' + V.cy + '" r="' + V.floorR + '" fill="#f3f1fa"/>';
+  (V.ring || []).forEach(function(r){
+    s += '<circle cx="' + V.cx + '" cy="' + V.cy + '" r="' + r.r + '" fill="none" stroke="#e6e3f2" stroke-width="' + r.w + '"/>';
+  });
+  (V.pillars || []).forEach(function(x){
+    s += '<path d="' + sgArc(V, x.rr, x.a, x.sp) + '" fill="#c6c2da"/>';
+    var p = sgRp(V, x.tr || ((x.rr[0] + x.rr[1]) / 2), x.a);
+    s += '<text x="' + p[0].toFixed(1) + '" y="' + (p[1] + 4).toFixed(1) + '" text-anchor="middle" font-size="12" font-weight="800" fill="#8d89a8">기둥</text>';
+  });
+  /* 무대 · 코트 */
+  var c = V.court, bd = c.bd || 12;
+  s += '<rect x="' + (c.x - bd) + '" y="' + (c.y - bd) + '" width="' + (c.w + bd*2) + '" height="' + (c.h + bd*2) + '" rx="8" fill="#2f2b66"/>'
+     + '<rect x="' + c.x + '" y="' + c.y + '" width="' + c.w + '" height="' + c.h + '" rx="4" fill="#e97132"/>'
+     + '<text x="' + (c.x + c.w/2) + '" y="' + (c.y + c.h/2 + 7) + '" text-anchor="middle" font-size="21" font-weight="800" fill="#ffffff">무대 · 코트</text>';
+  /* 구역 */
+  V.zones.forEach(function(z){
+    var hit = found.get(z.id);
+    var d = sgArc(V, z.rr, z.a, z.sp);
+    var p = sgRp(V, (z.rr[0] + z.rr[1]) / 2, z.a);
+    s += '<g class="sg-zone' + (hit ? ' hl' : '') + '" data-zone="' + z.id + '">'
+      + '<path d="' + d + '" fill="' + (hit ? '#e97132' : '#eceaf6') + '" stroke="' + (hit ? '#c85a1e' : '#d3d0e6') + '" stroke-width="' + (hit ? 2 : 1) + '"/>';
+    if (hit){
+      /* 구역 안 전체 좌석 점 (도면 데이터) */
+      var gm = 1.6, stepA = (z.sp - 2*gm) / z.nC;
+      var padR = Math.min(6, (z.rr[1] - z.rr[0]) * 0.1);
+      var stepR = (z.rr[1] - z.rr[0] - 2*padR) / z.nR;
+      var rmid = (z.rr[0] + z.rr[1]) / 2;
+      var size = Math.max(1.4, Math.min(4.2, 0.78 * Math.min(stepR, stepA * Math.PI / 180 * rmid)));
+      sgSeats(z).forEach(function(st){
+        var q = sgSeatPos(V, z, st);
+        s += '<circle cx="' + q[0].toFixed(1) + '" cy="' + q[1].toFixed(1) + '" r="' + (size * 0.55).toFixed(2) + '" fill="#ffffff" fill-opacity=".55"/>';
+      });
+    }
+    s += '<text x="' + p[0].toFixed(1) + '" y="' + (p[1] + (hit ? 8 : 6)).toFixed(1) + '" text-anchor="middle" font-size="' + (hit ? 26 : 17) + '" font-weight="800" fill="' + (hit ? '#ffffff' : '#55527f') + '">' + z.id + '</text></g>';
+  });
+  /* 전광판 */
+  (V.over || []).forEach(function(x){
+    var p = sgRp(V, (x.rr[0] + x.rr[1]) / 2, x.a);
+    s += '<path d="' + sgArc(V, x.rr, x.a, x.sp, 0) + '" fill="#131048"/>'
+       + '<text x="' + p[0].toFixed(1) + '" y="' + (p[1] + 3).toFixed(1) + '" text-anchor="middle" font-size="8" font-weight="800" fill="#9FD1FF">' + x.t + '</text>';
+  });
+  /* 내 좌석 점 */
+  found.forEach(function(e){
+    e.marks.forEach(function(m){
+      var st = sgSeats(e.z).filter(function(x){ return x.r === m.row - 1 && x.n === m.n; })[0];
+      if (!st) return;
+      var q = sgSeatPos(V, e.z, st);
+      s += '<circle class="sg-dot-mine" cx="' + q[0].toFixed(1) + '" cy="' + q[1].toFixed(1) + '" r="7" fill="#ffffff" stroke="#b34a17" stroke-width="2.6">'
+         + '<animate attributeName="r" values="6;9;6" dur="1.6s" repeatCount="indefinite"/></circle>'
+         + '<circle cx="' + q[0].toFixed(1) + '" cy="' + q[1].toFixed(1) + '" r="2.6" fill="#b34a17"/>';
+    });
+  });
+  /* 출입구 */
+  s += '<path d="M852 434 L952 396 L952 544 L852 506 Z" fill="#FFC61A" stroke="#E0A400" stroke-width="1.5"/>'
+     + '<path d="M882 450 L860 470 L882 490" fill="none" stroke="#FFFFFF" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>'
+     + '<text x="917" y="464" text-anchor="middle" font-size="12" font-weight="800" fill="#C8102E">메인 게이트</text>'
+     + '<text x="917" y="480" text-anchor="middle" font-size="9.5" font-weight="700" fill="#C8102E">(2층 로비)</text>';
+  Object.keys(V.gateAng || {}).forEach(function(nm){
+    var p = sgRp(V, 180, V.gateAng[nm]);
+    s += '<rect x="' + (p[0]-13).toFixed(1) + '" y="' + (p[1]-8).toFixed(1) + '" width="26" height="16" rx="4" fill="#FFE3EA" stroke="#E03131" stroke-width="1.1"/>'
+       + '<text x="' + p[0].toFixed(1) + '" y="' + (p[1]+3.5).toFixed(1) + '" text-anchor="middle" font-size="8.5" font-weight="800" fill="#C8102E">' + nm + '</text>';
+  });
+  (V.gateNum || []).forEach(function(g){
+    var p = sgRp(V, 330, g[1]);
+    s += '<circle cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="9.5" fill="#FFC61A" stroke="#C8102E" stroke-width="1.6"/>'
+       + '<text x="' + p[0].toFixed(1) + '" y="' + (p[1]+3.6).toFixed(1) + '" text-anchor="middle" font-size="10" font-weight="800" fill="#C8102E">' + g[0] + '</text>';
+  });
+  return s + '</svg>';
+}
+function sgDetailHTML(V, e){
+  var z = e.z;
+  var rowsWithMine = {};
+  e.marks.forEach(function(m){ (rowsWithMine[m.row - 1] = rowsWithMine[m.row - 1] || []).push(m.n); });
+  var byPos = {};   /* r|dc → seat */
+  sgSeats(z).forEach(function(st){ byPos[st.r + '|' + sgCIdx(z, st)] = st; });
+
+  var h = '<div class="sg-detail">'
+    + '<div class="sg-dh"><b>' + esc(z.id) + '구역</b><span>' + esc(z.fl) + '</span></div>'
+    + '<p class="sg-route">🚪 ' + sgRoute(V, z) + '</p>';
+  if (V.notes && V.notes[z.id]) h += '<p class="sg-note">ℹ️ ' + esc(V.notes[z.id]) + '</p>';
+  h += '<div class="sg-cap">▲ 무대 · 코트 방향 ▲</div>'
+    + '<div class="sg-gridwrap"><div class="sg-grid" style="grid-template-columns:auto repeat(' + z.nC + ',11px)">';
+  for (var r = 0; r < z.nR; r++){
+    var mineRow = rowsWithMine[r];
+    h += '<div class="sg-rl' + (mineRow ? ' on' : '') + '">' + esc(z.rl ? z.rl[r] : (r+1) + '열') + '</div>';
+    for (var dc = 0; dc < z.nC; dc++){
+      var st = byPos[r + '|' + dc];
+      if (!st){ h += '<div class="sg-seat none"></div>'; continue; }
+      var mine = mineRow && mineRow.indexOf(st.n) !== -1;
+      h += '<div class="sg-seat' + (mine ? ' mine' : '') + '">' + (mine ? st.n : '') + '</div>';
+    }
+  }
+  h += '</div></div>';
+  /* 좌석 번호 진행 방향 (내 열 기준) */
+  var firstMineRow = Object.keys(rowsWithMine)[0];
+  if (firstMineRow !== undefined){
+    var rowSeats = sgSeats(z).filter(function(st){ return st.r === +firstMineRow; })
+      .sort(function(a, b){ return sgCIdx(z, a) - sgCIdx(z, b); });
+    if (rowSeats.length > 1)
+      h += '<p class="sg-dir">좌석 번호는 그림 기준 왼쪽 <b>' + rowSeats[0].n + '번</b> → 오른쪽 <b>' + rowSeats[rowSeats.length-1].n + '번</b> 방향입니다</p>';
+  }
+  h += '<p class="sg-my">내 좌석 · ' + e.labels.map(esc).join(' · ') + '</p></div>';
+  return h;
+}
+function buildSeatGuide(person){
+  var host = $('#seatGuide');
+  var V = window.VENUE_MAP;
+  if (!V || !person){ host.style.display = 'none'; return; }
+  var byId = {};
+  V.zones.forEach(function(z){ byId[z.id] = z; });
+  var found = new Map();
+  person.t.forEach(function(tk){
+    var zid = sgZoneId(tk.z);
+    var z = zid && byId[zid];
+    if (!z) return;
+    if (!found.has(zid)) found.set(zid, { z: z, marks: [], labels: [] });
+    var e = found.get(zid);
+    e.labels.push(String(tk.z).trim() + ' ' + String(tk.s).trim());
+    var row = sgRow(tk.s);
+    if (row != null && row >= 1 && row <= z.nR)
+      sgSeatNos(tk.s).forEach(function(n){ e.marks.push({ row: row, n: n }); });
+  });
+  if (!found.size){ host.style.display = 'none'; return; }
+  var h = '<h2>좌석 위치 안내 <small>' + esc(V.name) + '</small></h2>'
+    + '<p class="desc">배치도의 <b style="color:var(--orange-deep)">주황색</b>이 내 구역, 흰 점 테두리가 내 좌석 위치입니다.</p>'
+    + '<div class="sg-map">' + sgOverviewSVG(V, found) + '</div>';
+  found.forEach(function(e){ h += sgDetailHTML(V, e); });
+  host.innerHTML = h;
+  host.style.display = 'block';
 }
 
 /* ==================== 탭 & 관리자 ==================== */
