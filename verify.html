@@ -83,7 +83,7 @@ button:disabled{opacity:.5}
 var CFG = window.TICKET_CONFIG, T = window.TCrypto;
 var $ = function(s){ return document.querySelector(s); };
 var DB = null, dbErr = null;
-var ready = fetch('/api/db?event=' + encodeURIComponent(CFG.salt) + '&v=' + Date.now())
+var ready = fetch('/api/db?event=' + encodeURIComponent(CFG.salt))
   .then(function(r){ if(!r.ok) throw 0; return r.json(); })
   .catch(function(){
     return fetch('data/db.json?v=' + Date.now())
@@ -190,7 +190,7 @@ function check(codeRaw){
     renderStaffBox();
     refreshStates();
     if (pollT) clearInterval(pollT);
-    pollT = setInterval(refreshStates, 10000);
+    pollT = setInterval(function(){ if (!document.hidden) refreshStates(); }, 12000 + Math.floor(Math.random() * 4000));
   }).catch(function(e){
     if (e === 'db') show(false, '<div class="big">✕ 데이터 로드 실패</div><div class="hint">네트워크 연결을 확인한 뒤 새로고침해 주세요.</div>');
     else show(false, '<div class="big">✕ 등록되지 않은 코드</div><div class="hint">발권된 적 없는 코드입니다. <b>위조 티켓일 수 있으니</b> 명단(스태프 확인용 엑셀)과 대조해 주세요.</div>');
@@ -250,6 +250,8 @@ $('#out').addEventListener('click', function(ev){
     renderStaffBox();
   }
 });
+
+document.addEventListener('visibilitychange', function(){ if (!document.hidden) refreshStates(); });
 
 $('#form').addEventListener('submit', function(ev){ ev.preventDefault(); check($('#inCode').value); });
 

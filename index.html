@@ -434,7 +434,7 @@ document.title = CFG.eventName + ' · 모바일 초대 티켓';
 
 /* DB 로드 — 서버(API) 우선, 실패 시 저장소 파일 */
 var DB = null, dbErr = null;
-fetch('/api/db?event=' + encodeURIComponent(CFG.salt) + '&v=' + Date.now())
+fetch('/api/db?event=' + encodeURIComponent(CFG.salt))
   .then(function(r){ if(!r.ok) throw 0; return r.json(); })
   .catch(function(){
     return fetch('data/db.json?v=' + Date.now())
@@ -632,12 +632,18 @@ function startStatusPoll(){
   stopStatusPoll();
   statusFails = 0;
   pollStatus();
-  statusTimer = setInterval(pollStatus, 10000);
+  /* 12~16초 무작위 간격: 수백 명이 동시에 열어도 요청이 분산됨 */
+  statusTimer = setInterval(pollStatus, 12000 + Math.floor(Math.random() * 4000));
 }
 function stopStatusPoll(){
   if (statusTimer) { clearInterval(statusTimer); statusTimer = null; }
 }
 window.addEventListener('focus', function(){ if (curPerson) pollStatus(); });
+/* 화면이 백그라운드로 가면 폴링 중단, 다시 보이면 즉시 갱신 — 서버 부하와 배터리 절약 */
+document.addEventListener('visibilitychange', function(){
+  if (document.hidden) stopStatusPoll();
+  else if (curPerson && guestView === 'result') startStatusPoll();
+});
 
 /* 스태프 입장 확인 버튼 (관람객 화면) — 비밀번호 없이, 확인 후 즉시 처리.
    취소는 스태프만(verify.html 스태프 모드 · 관리자 현황판) 가능. */
@@ -1319,7 +1325,7 @@ $('#btnDashLoad').addEventListener('click', function(){
   dashRefresh(true).finally(function(){
     btn.disabled = false; btn.textContent = '새로고침';
     if (!dashTimer) dashTimer = setInterval(function(){
-      if ($('#dashAuto').checked && curTab === 'admin' && authed && dashLoaded) dashRefresh(false);
+      if (!document.hidden && $('#dashAuto').checked && curTab === 'admin' && authed && dashLoaded) dashRefresh(false);
     }, 8000);
   });
 });
