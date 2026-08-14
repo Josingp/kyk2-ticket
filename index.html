@@ -178,7 +178,7 @@ button.primary:focus-visible{outline:3px solid var(--navy);outline-offset:2px}
   font:500 13px var(--body);background:#fbfaff;outline:none}
 .rosterbar input:focus-visible{border-color:var(--orange)}
 .tablewrap{margin-top:10px;overflow-x:auto;border:1.5px solid #e7e4f3;border-radius:12px}
-table.roster{border-collapse:collapse;width:100%;min-width:480px}
+table.roster{border-collapse:collapse;width:100%;min-width:560px}
 .roster th{background:#f4f2fb;color:#4c4870;font:700 11.5px var(--body);padding:8px 6px;text-align:left;white-space:nowrap}
 .roster td{border-top:1px solid #efecf7;padding:2px 3px}
 .roster td input{width:100%;border:0;background:none;font:500 12.5px var(--body);color:#26243f;
@@ -189,6 +189,9 @@ table.roster{border-collapse:collapse;width:100%;min-width:480px}
 .roster tr.badrow td{background:#fdeeea}
 #btnRosterApply{background:var(--navy);color:#fff}
 #btnRosterStaff{background:var(--orange);color:#fff}
+
+.t-name.has-sub{margin-bottom:0}
+.t-subname{text-align:center;font:700 21px var(--disp);color:#c9c6ee;letter-spacing:.01em;margin-top:2px}
 
 /* ---------- 위치 배지 ---------- */
 .geo{display:none;margin:-8px auto 16px;width:fit-content;max-width:100%;padding:7px 14px;border-radius:99px;
@@ -338,8 +341,9 @@ footer{margin-top:34px;text-align:center;color:#7672ab;font-size:11.5px;line-hei
     </div>
     <p class="desc" style="margin-top:8px">명단 엑셀을 올리면 암호화 후 <b>서버 DB에 바로 적용</b>됩니다. (재배포 불필요, 즉시 반영)
     명단 원본은 서버 저장소(Upstash)에만 보관되고, 공개 DB에는 암호문만 올라갑니다.</p>
-    <p class="desc" style="margin-top:8px">열 이름: <code>이름</code> <code>연락처</code> <code>구역</code> <code>좌석</code> (선택: <code>등급</code>)
-    · 같은 사람의 좌석이 여러 개면 행을 여러 줄로 입력 · 양식: <a href="tools/명단_양식.xlsx" download>명단_양식.xlsx</a></p>
+    <p class="desc" style="margin-top:8px">열 이름: <code>대분류</code> <code>소분류</code>(동반인·선택) <code>연락처</code> <code>구역</code> <code>좌석</code> (선택: <code>등급</code>)
+    · 조회는 대분류+연락처 뒤 4자리로 하며, 소분류가 있으면 티켓에 <b>대분류 (소분류)</b>로 표기됩니다
+    · 같은 사람의 좌석이 여러 개면 행을 여러 줄로 · 양식: <a href="tools/명단_양식.xlsx" download>명단_양식.xlsx</a></p>
     <label class="drop" id="drop">
       명단 엑셀(.xlsx)을 여기로 드래그하거나<br>클릭해서 선택
       <input type="file" id="file" accept=".xlsx,.xls">
@@ -394,7 +398,7 @@ footer{margin-top:34px;text-align:center;color:#7672ab;font-size:11.5px;line-hei
       </div>
       <div class="tablewrap">
         <table class="roster">
-          <thead><tr><th>이름</th><th>연락처</th><th>구역</th><th>좌석</th><th>등급</th><th></th></tr></thead>
+          <thead><tr><th>대분류</th><th>소분류</th><th>연락처</th><th>구역</th><th>좌석</th><th>등급</th><th></th></tr></thead>
           <tbody id="rosterBody"></tbody>
         </table>
       </div>
@@ -495,7 +499,8 @@ function render(person){
       '<div class="t-navy">' +
         '<div class="t-wm" aria-hidden="true"></div>' +
         (tk.g ? '<div class="t-grade">' + esc(tk.g) + '</div>' : '') +
-        '<div class="t-name">' + esc(person.n) + '</div>' +
+        '<div class="t-name' + (tk.b ? ' has-sub' : '') + '">' + esc(person.n) + '</div>' +
+        (tk.b ? '<div class="t-subname">(' + esc(tk.b) + ')</div>' : '') +
         '<div class="t-rule"></div>' +
         '<div class="t-zone' + small + '">' + esc(z) + '</div>' +
         '<div class="t-seat' + small + '">' + esc(s) + '</div>' +
@@ -859,7 +864,7 @@ function buildSeatGuide(person){
     if (!z) return;
     if (!found.has(zid)) found.set(zid, { z: z, marks: [], labels: [] });
     var e = found.get(zid);
-    e.labels.push(String(tk.z).trim() + ' ' + String(tk.s).trim());
+    e.labels.push(String(tk.z).trim() + ' ' + String(tk.s).trim() + (tk.b ? ' (' + tk.b + ')' : ''));
     var row = sgRow(tk.s);
     if (row != null && row >= 1 && row <= z.nR)
       sgSeatNos(tk.s).forEach(function(n){ e.marks.push({ row: row, n: n }); });
@@ -1103,7 +1108,8 @@ function parseSheet(wb){
     var row = aoa[r].map(function(c){ return String(c).trim(); });
     var m = {};
     row.forEach(function(c, idx){
-      if (/^이\s*름$|^성\s*명$/.test(c)) m.name = idx;
+      if (/^이\s*름$|^성\s*명$|^대\s*분\s*류$/.test(c)) m.name = idx;
+      else if (/^소\s*분\s*류$|동반/.test(c)) m.sub = idx;
       else if (/연락처|전화|휴대폰|핸드폰/.test(c)) m.phone = idx;
       else if (/구역/.test(c)) m.zone = idx;
       else if (/좌석/.test(c)) m.seat = idx;
@@ -1123,11 +1129,12 @@ function parseSheet(wb){
     var zone  = String(a[cols.zone] == null ? '' : a[cols.zone]).trim();
     var seat  = String(a[cols.seat] == null ? '' : a[cols.seat]).trim();
     var grade = cols.grade != null ? String(a[cols.grade] == null ? '' : a[cols.grade]).trim() : '';
+    var sub = cols.sub != null ? String(a[cols.sub] == null ? '' : a[cols.sub]).trim() : '';
     if (!phone && !zone && !seat) continue;
     var ln = i + 1;
     if (T.last4(phone).length < 4) { problems.push(ln + '행 (' + name + '): 연락처 숫자가 4자리 미만'); continue; }
     if (!zone || !seat) { problems.push(ln + '행 (' + name + '): 구역/좌석 비어 있음'); continue; }
-    rows.push({ ln: ln, name: name, phone: phone, zone: zone, seat: seat, grade: grade });
+    rows.push({ ln: ln, name: name, phone: phone, zone: zone, seat: seat, grade: grade, sub: sub });
   }
   return { rows: rows, problems: problems };
 }
@@ -1154,18 +1161,89 @@ async function buildDB(people, onProg){
 function makeStaffBook(people){
   var rows = [];
   people.forEach(function(g){
-    g.t.forEach(function(tk){ rows.push([g.n, g.p, tk.z, tk.s, T.fmtCode(g.c), tk.g || '']); });
+    g.t.forEach(function(tk){ rows.push([g.n, tk.b || '', g.p, tk.z, tk.s, T.fmtCode(g.c), tk.g || '']); });
   });
-  rows.sort(function(a, b){ return (a[2]+a[3]).localeCompare(b[2]+b[3], 'ko'); });
-  var aoa = [['이름','연락처','구역','좌석','확인코드','등급']].concat(rows);
+  rows.sort(function(a, b){ return (a[3]+a[4]).localeCompare(b[3]+b[4], 'ko'); });
+  var aoa = [['대분류','소분류','연락처','구역','좌석','확인코드','등급']].concat(rows);
   var ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = [{wch:12},{wch:16},{wch:10},{wch:14},{wch:13},{wch:10}];
+  ws['!cols'] = [{wch:12},{wch:12},{wch:16},{wch:10},{wch:14},{wch:13},{wch:10}];
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '입장확인');
   return wb;
 }
 function publishDB(db, people){
   return apiAdmin({ action: 'publish', db: db, roster: { v: 1, built: db.built, people: people } });
+}
+
+/* ---------- 증분 적용 ----------
+   서버 명단과 비교해 바뀐 사람만 재암호화하고, 기존 DB에 병합해 발행한다.
+   안 바뀐 사람은 확인코드·암호문이 그대로 유지된다(공유 링크·출력 명단 보존). */
+function tixCanon(t){
+  return JSON.stringify((t || []).map(function(tk){
+    return [String(tk.z).trim(), String(tk.s).trim(), tk.g || '', tk.b || ''];
+  }));
+}
+async function applyIncremental(newPeople, prog){
+  /* 서버 최신 상태 (엣지 캐시 우회) */
+  var oldPeople = [];
+  try {
+    var rj = await apiAdmin({ action: 'roster' });
+    oldPeople = (rj.roster && rj.roster.people) || [];
+  } catch(e){ oldPeople = []; }
+  var oldDb = null;
+  try {
+    var r = await fetch('/api/db?event=' + encodeURIComponent(CFG.salt) + '&fresh=' + Date.now());
+    if (r.ok) oldDb = await r.json();
+  } catch(e){}
+
+  var keyOf = function(p){ return T.normName(p.n) + '|' + T.last4(p.p); };
+  var oldByKey = new Map();
+  oldPeople.forEach(function(p){ oldByKey.set(keyOf(p), p); });
+
+  var toBuild = [], kept = 0, added = 0, changed = 0, rosterOnly = 0;
+  var newKeys = new Set();
+  newPeople.forEach(function(np){
+    var k = keyOf(np);
+    newKeys.add(k);
+    var op = oldByKey.get(k);
+    if (!op){ added++; toBuild.push(np); return; }
+    np.c = op.c;   /* 확인코드 유지 */
+    if (op.n !== np.n || tixCanon(op.t) !== tixCanon(np.t)){ changed++; toBuild.push(np); }
+    else {
+      kept++;
+      if (String(op.p) !== String(np.p)) rosterOnly++;   /* 전체번호만 변경 → 명단만 갱신 */
+    }
+  });
+  var removedPeople = oldPeople.filter(function(p){ return !newKeys.has(keyOf(p)); });
+
+  var db;
+  if (oldDb && oldDb.records && oldDb.verify && oldPeople.length){
+    db = { v: 1, built: new Date().toISOString(), records: oldDb.records, verify: oldDb.verify };
+    /* 삭제 인원: 파생 ID 계산 후 제거 */
+    for (var i = 0; i < removedPeople.length; i++){
+      var rp = removedPeople[i];
+      var rec = await T.deriveRecord(rp.n, rp.p, CFG);
+      delete db.records[rec.id];
+      if (rp.c){
+        var ver = await T.deriveVerify(rp.c, CFG);
+        delete db.verify[ver.id];
+      }
+    }
+    /* 변경·추가 인원만 재암호화해 병합 */
+    if (toBuild.length){
+      var part = await buildDB(toBuild, prog);
+      Object.keys(part.records).forEach(function(id){ db.records[id] = part.records[id]; });
+      Object.keys(part.verify).forEach(function(id){ db.verify[id] = part.verify[id]; });
+    }
+  } else {
+    /* 서버 DB가 없거나 못 읽음 → 전체 생성 (최초 업로드 등) */
+    db = await buildDB(newPeople, prog);
+    added = newPeople.length; changed = 0; kept = 0;
+  }
+
+  await publishDB(db, newPeople);
+  return { db: db, added: added, changed: changed, removed: removedPeople.length,
+           kept: kept, rosterOnly: rosterOnly, built: toBuild.length };
 }
 
 /* ---------- 엑셀 변환 → 즉시 서버 적용 ---------- */
@@ -1190,44 +1268,42 @@ async function handleFile(f){
     var pd = function(p){ return String(p).replace(/\D/g,''); };
     if (pd(g.p) !== pd(r.phone))
       collisions.push(r.name + ': ' + g.lns[0] + '행(' + g.p + ')과 ' + r.ln + '행(' + r.phone + ')의 이름+뒤4자리가 같지만 전체 번호가 다릅니다. 두 사람이 하나의 조회로 합쳐지니 확인이 필요합니다.');
-    g.t.push({ z: r.zone, s: r.seat, g: r.grade || undefined });
+    g.t.push({ z: r.zone, s: r.seat, g: r.grade || undefined, b: r.sub || undefined });
     g.lns.push(r.ln);
   });
 
   $('#bar').style.display = 'block';
   $('#stat').style.display = 'block';
+  $('#stat').textContent = '서버 명단과 비교하는 중…';
   var people = Array.from(groups.values()).map(function(g){ return { n: g.n, p: g.p, t: g.t }; });
-  var db = await buildDB(people, function(d, t){
-    $('#barIn').style.width = Math.round(d / t * 100) + '%';
-    $('#stat').textContent = '암호화 중… ' + d + ' / ' + t + '명';
-  });
-
-  if (dbBlobURL) URL.revokeObjectURL(dbBlobURL);
-  dbBlobURL = URL.createObjectURL(new Blob([JSON.stringify(db, null, 1)], { type: 'application/json' }));
-  staffBook = makeStaffBook(people);
-  $('#btns').style.display = 'flex';
 
   var warnMsgs = [];
   if (collisions.length) warnMsgs.push('⚠ 이름+뒤4자리 중복:\n- ' + collisions.join('\n- '));
   if (parsed.problems.length) warnMsgs.push('⚠ 건너뛴 행:\n- ' + parsed.problems.join('\n- '));
   if (warnMsgs.length) { var w = $('#warn'); w.textContent = warnMsgs.join('\n\n'); w.style.display = 'block'; }
 
-  /* 서버 자동 적용 */
   var d = $('#done');
-  $('#stat').textContent = '서버에 적용하는 중…';
   try {
-    await publishDB(db, people);
-    DB = db;
+    var sum = await applyIncremental(people, function(dn, tt){
+      $('#barIn').style.width = Math.round(dn / tt * 100) + '%';
+      $('#stat').textContent = '변경분 암호화 중… ' + dn + ' / ' + tt + '명 (전체 ' + people.length + '명)';
+    });
+    DB = sum.db;
     serverPeople = people;
-    d.innerHTML = '✔ <b>' + people.length + '명 · 티켓 ' + rows.length + '매</b> — 서버에 적용 완료, 즉시 반영됩니다.<br>스태프 확인용 명단을 내려받아 입장 스태프에게 전달하세요.';
+    if (dbBlobURL) URL.revokeObjectURL(dbBlobURL);
+    dbBlobURL = URL.createObjectURL(new Blob([JSON.stringify(sum.db, null, 1)], { type: 'application/json' }));
+    if (window.XLSX && XLSX.utils && XLSX.utils.aoa_to_sheet) staffBook = makeStaffBook(people);
+    $('#btns').style.display = 'flex';
+    $('#barIn').style.width = '100%';
+    d.innerHTML = '✔ <b>' + people.length + '명 · 티켓 ' + rows.length + '매</b> — 서버에 적용 완료, 즉시 반영됩니다.<br>'
+      + '변경 반영: 추가 ' + sum.added + ' · 수정 ' + sum.changed + ' · 삭제 ' + sum.removed + ' · 유지 ' + sum.kept + '명'
+      + (sum.kept ? ' (유지 인원의 확인코드·공유 링크는 그대로)' : '');
     d.style.display = 'block';
     $('#stat').textContent = '적용 완료 · ' + new Date().toLocaleTimeString('ko-KR');
     if ($('#rosterBox').style.display !== 'none') renderRoster();
   } catch(e){
-    d.innerHTML = '✔ 변환 완료 — <b>' + people.length + '명 · 티켓 ' + rows.length + '매</b>';
-    d.style.display = 'block';
-    fail('서버 자동 적용 실패: ' + apiErrMsg(e) + '\n아래 db.json을 내려받아 저장소의 data/db.json을 직접 교체해도 됩니다.');
-    $('#stat').textContent = '변환 완료 (서버 미적용) · ' + new Date().toLocaleTimeString('ko-KR');
+    fail('서버 적용 실패: ' + apiErrMsg(e) + '\n네트워크 확인 후 같은 파일을 다시 올려 주세요.');
+    $('#stat').textContent = '적용 실패 · ' + new Date().toLocaleTimeString('ko-KR');
   }
 }
 
@@ -1265,7 +1341,7 @@ function dashRefresh(manual){
 function personStats(g){
   var seats = (g.t || []).map(function(tk){
     var ts = dashChecks[g.c + '|' + tk.z + '|' + tk.s] || null;
-    return { z: tk.z, s: tk.s, ts: ts };
+    return { z: tk.z, s: tk.s, b: tk.b, ts: ts };
   });
   var inN = seats.filter(function(x){ return x.ts; }).length;
   var last = seats.reduce(function(m, x){ return (x.ts && (!m || x.ts > m)) ? x.ts : m; }, null);
@@ -1308,7 +1384,7 @@ function renderDash(){
       var c = document.createElement('button');
       c.type = 'button';
       c.className = 'chip' + (seat.ts ? ' in' : '');
-      c.textContent = String(seat.z).replace(/구역\s*$/, '') + ' · ' + seat.s + (seat.ts ? ' ✓' : '');
+      c.textContent = String(seat.z).replace(/구역\s*$/, '') + ' · ' + seat.s + (seat.b ? ' · ' + seat.b : '') + (seat.ts ? ' ✓' : '');
       c.title = seat.ts ? fmtTs(seat.ts) + ' 입장 — 누르면 취소' : '누르면 입장 처리';
       c.dataset.c = g.c; c.dataset.z = seat.z; c.dataset.s = seat.s; c.dataset.on = seat.ts ? '1' : '';
       chips.appendChild(c);
@@ -1367,8 +1443,8 @@ function rosterFail(msg){ var e=$('#rErr'); e.textContent=msg; e.style.display='
 function rowEl(vals, code){
   var tr = document.createElement('tr');
   if (code) tr.dataset.c = code;
-  var widths = [86, 118, 74, 104, 62];
-  ['n','p','z','s','g'].forEach(function(k, i){
+  var widths = [78, 70, 116, 72, 100, 56];
+  ['n','b','p','z','s','g'].forEach(function(k, i){
     var td = document.createElement('td');
     var inp = document.createElement('input');
     inp.value = vals[i] || '';
@@ -1387,7 +1463,7 @@ function renderRoster(){
   var tb = $('#rosterBody'); tb.innerHTML = '';
   (serverPeople || []).forEach(function(g){
     g.t.forEach(function(tk){
-      tb.appendChild(rowEl([g.n, g.p, tk.z, tk.s, tk.g || ''], g.c));
+      tb.appendChild(rowEl([g.n, tk.b || '', g.p, tk.z, tk.s, tk.g || ''], g.c));
     });
   });
   $('#rosterBox').style.display = 'block';
@@ -1457,7 +1533,7 @@ function collectRoster(){
     if (bad.length) { tr.classList.add('badrow'); errs.push((i+1) + '번째 행: ' + bad.join(', ') + ' 확인'); continue; }
     var key = T.normName(v.n) + '|' + T.last4(v.p);
     if (!groups.has(key)) groups.set(key, { n: v.n, p: v.p, c: oldByKey.get(key) || undefined, t: [] });
-    groups.get(key).t.push({ z: v.z, s: v.s, g: v.g || undefined });
+    groups.get(key).t.push({ z: v.z, s: v.s, g: v.g || undefined, b: v.b || undefined });
     ticketCount++;
   }
   if (errs.length) throw new Error('- ' + errs.join('\n- '));
@@ -1470,25 +1546,26 @@ $('#btnRosterApply').addEventListener('click', async function(){
   try { col = collectRoster(); }
   catch(e){ return rosterFail('아래 행을 고친 뒤 다시 적용해 주세요.\n' + e.message); }
   if (!col.people.length) return rosterFail('적용할 행이 없습니다. 명단을 비우려면 행을 남기지 말고 확인 후 다시 시도하세요.');
-  if (!window.confirm(col.people.length + '명 · 티켓 ' + col.tickets + '매로 서버 명단을 교체합니다. 계속할까요?')) return;
 
   var btn = this; btn.disabled = true;
   try {
     try { await loadXLSX(); } catch(e){}
     $('#rBar').style.display = 'block'; $('#rStat').style.display = 'block';
-    var db = await buildDB(col.people, function(d, t){
-      $('#rBarIn').style.width = Math.round(d / t * 100) + '%';
-      $('#rStat').textContent = '암호화 중… ' + d + ' / ' + t + '명';
+    $('#rStat').textContent = '서버 명단과 비교하는 중…';
+    var sum = await applyIncremental(col.people, function(dn, tt){
+      $('#rBarIn').style.width = Math.round(dn / tt * 100) + '%';
+      $('#rStat').textContent = '변경분 암호화 중… ' + dn + ' / ' + tt + '명';
     });
-    $('#rStat').textContent = '서버에 적용하는 중…';
-    await publishDB(db, col.people);
-    DB = db;
+    DB = sum.db;
     serverPeople = col.people;
-    rosterBuilt = db.built;
-    if (window.XLSX) staffBook = makeStaffBook(col.people);
+    rosterBuilt = sum.db.built;
+    if (window.XLSX && XLSX.utils && XLSX.utils.aoa_to_sheet) staffBook = makeStaffBook(col.people);
     renderRoster();
     var d = $('#rDone');
-    d.textContent = '✔ 적용 완료 — 즉시 반영됩니다. 좌석·코드가 바뀐 사람이 있으면 스태프 명단을 새로 내려받아 전달하세요.';
+    $('#rBarIn').style.width = '100%';
+    d.textContent = (sum.built || sum.removed || sum.rosterOnly)
+      ? '✔ 적용 완료 — 추가 ' + sum.added + ' · 수정 ' + sum.changed + ' · 삭제 ' + sum.removed + ' · 유지 ' + sum.kept + '명. 바뀐 사람만 갱신되어 나머지 확인코드·공유 링크는 그대로입니다.'
+      : '✔ 서버와 동일 — 적용할 변경이 없습니다.';
     d.style.display = 'block';
     $('#rStat').textContent = '적용 완료 · ' + new Date().toLocaleTimeString('ko-KR');
   } catch(e){

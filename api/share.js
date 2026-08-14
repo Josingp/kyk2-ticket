@@ -49,7 +49,7 @@ module.exports = async (req, res) => {
       const seat = person && (person.t || []).find(tk => norm(tk.z) === d.z && norm(tk.s) === d.s);
       if (!seat) { res.status(404).json({ error: 'unknown_seat' }); return; }
       res.status(200).json({ ok: true, n: person.n, c: person.c,
-        seat: { z: norm(seat.z), s: norm(seat.s), g: seat.g || undefined } });
+        seat: { z: norm(seat.z), s: norm(seat.s), g: seat.g || undefined, b: seat.b || undefined } });
       return;
     }
 

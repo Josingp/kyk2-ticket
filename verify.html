@@ -177,7 +177,7 @@ function check(codeRaw){
     curCode = code; checkinOff = false;
     var seats = p.t.map(function(tk){
       return '<li data-z="'+escA(String(tk.z||'').trim())+'" data-s="'+escA(String(tk.s||'').trim())+'">' +
-        '<span class="seat">'+esc(zoneText(tk.z))+' · '+esc(seatText(tk.s))+'</span>' +
+        '<span class="seat">'+esc(zoneText(tk.z))+' · '+esc(seatText(tk.s))+(tk.b?' <b>('+esc(tk.b)+')</b>':'')+'</span>' +
         '<span class="st">확인 중…</span>' +
         '<button type="button" class="tg" style="display:none">입장</button></li>';
     }).join('');
