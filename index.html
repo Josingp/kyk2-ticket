@@ -164,6 +164,66 @@ table.roster{border-collapse:collapse;width:100%;min-width:480px}
 #btnRosterApply{background:var(--navy);color:#fff}
 #btnRosterStaff{background:var(--orange);color:#fff}
 
+/* ---------- 위치 배지 ---------- */
+.geo{display:none;margin:-8px auto 16px;width:fit-content;max-width:100%;padding:7px 14px;border-radius:99px;
+  font:700 12px var(--body);letter-spacing:.01em}
+.geo.show{display:block}
+.geo.ok{background:#e9f8ee;color:#14522b;border:1.5px solid #2fa45c}
+.geo.far{background:#fff7ed;color:#8a4b12;border:1.5px solid #f0b27d}
+.geo.na{background:rgba(255,255,255,.1);color:#b9b6dd;border:1.5px solid rgba(255,255,255,.2)}
+
+/* ---------- 입장 체크 (티켓별) ---------- */
+.t-check{display:flex;align-items:center;gap:10px;margin-top:10px;background:rgba(255,255,255,.14);
+  border-radius:12px;padding:10px 12px}
+.t-state{flex:1;font:700 12.5px var(--body);color:#fff}
+.t-state b{font-family:var(--disp)}
+.t-staffbtn{border:0;border-radius:9px;padding:9px 12px;background:rgba(255,255,255,.92);
+  color:var(--navy);font:700 11.5px var(--body);cursor:pointer;white-space:nowrap}
+.t-pin{display:none;gap:8px;margin-top:10px}
+.t-pin.show{display:flex}
+.t-pin input{flex:1;min-width:0;border:0;border-radius:9px;padding:10px 12px;font:700 14px var(--body);outline:none}
+.t-pin button{border:0;border-radius:9px;padding:10px 14px;background:var(--navy);color:#fff;font:700 12.5px var(--body);cursor:pointer}
+.t-checkmsg{display:none;margin-top:8px;font:600 12px var(--body);color:#ffe1cf}
+.t-checkmsg.show{display:block}
+
+/* 입장 완료(비활성) 티켓 */
+.ticket.used{background:#8f8d9e}
+.ticket.used .sheen{display:none}
+.ticket.used .t-navy{background:#3c3a52}
+.ticket.used .t-navy>*:not(.t-stamp):not(.t-wm){opacity:.42}
+.ticket.used .t-live{opacity:.5}
+.ticket.used .t-grade{background:#6d6b7e}
+.t-stamp{display:none;position:absolute;inset:0;z-index:3;align-items:center;justify-content:center;pointer-events:none}
+.ticket.used .t-stamp{display:flex}
+.t-stamp span{transform:rotate(-14deg);border:4px solid #ffb08a;color:#ffb08a;border-radius:14px;
+  padding:10px 22px;font:700 26px var(--disp);letter-spacing:.08em;background:rgba(20,16,60,.55);
+  box-shadow:0 8px 24px rgba(0,0,0,.35)}
+.t-stamp small{display:block;text-align:center;font:700 12px var(--body);letter-spacing:.02em;margin-top:4px}
+
+/* ---------- 실시간 입장 현황 ---------- */
+.dashsum{margin-top:12px}
+.dashnum{font:700 13.5px var(--body);color:var(--navy)}
+.pbar{height:10px;background:#e7e5f2;border-radius:99px;overflow:hidden;margin-top:8px}
+.pbar i{display:block;height:100%;width:0;background:var(--orange);transition:width .3s}
+.autolab{display:flex;align-items:center;gap:5px;font:600 12px var(--body);color:#66627f;white-space:nowrap}
+.dashfilters{display:flex;gap:6px;margin-top:10px}
+.dashfilters button{flex:1;border:1.5px solid #dcd9ea;background:#fff;color:#66627f;border-radius:9px;
+  padding:8px 0;font:700 11.5px var(--body);cursor:pointer}
+.dashfilters button.on{background:var(--navy);border-color:var(--navy);color:#fff}
+#dashList{margin-top:10px}
+.p-row{border:1.5px solid #e7e4f3;border-radius:12px;padding:11px 12px;margin-top:8px}
+.p-row.done{background:#f2faf4;border-color:#bfe4cb}
+.p-row.part{background:#fffaf3;border-color:#f2d9ba}
+.p-head{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.p-head b{font:700 14px var(--body);color:#26243f}
+.p-sub{font:600 11.5px var(--body);color:#8985ab}
+.p-time{margin-left:auto;font:600 11px var(--body);color:#8985ab}
+.p-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.chip{border:1.5px solid #d7d3ea;background:#fbfaff;color:#5a568a;border-radius:8px;
+  padding:6px 9px;font:700 11px var(--body);cursor:pointer}
+.chip.in{background:#2fa45c;border-color:#2fa45c;color:#fff}
+.chip:active{transform:scale(.96)}
+
 footer{margin-top:34px;text-align:center;color:#7672ab;font-size:11.5px;line-height:1.7}
 
 @media (prefers-reduced-motion:reduce){
@@ -213,6 +273,7 @@ footer{margin-top:34px;text-align:center;color:#7672ab;font-size:11.5px;line-hei
   <section id="result">
     <p class="hello" id="hello"></p>
     <p class="live-note">입장 시 캡처 화면이 아닌 <b>실시간 화면</b>을 제시해 주세요.<br>(초 단위 시계가 움직여야 유효한 티켓입니다)</p>
+    <p class="geo" id="geoBadge"></p>
     <div id="tickets"></div>
     <button class="again" id="btnAgain" type="button">다른 정보로 조회</button>
   </section>
@@ -258,6 +319,30 @@ footer{margin-top:34px;text-align:center;color:#7672ab;font-size:11.5px;line-hei
       <li>업로드 즉시 서버에 적용됩니다. 자동 적용이 실패하면 <code>db.json</code>을 내려받아 저장소의 <code>data/db.json</code>을 교체하세요. (백업 경로)</li>
       <li><code>스태프 확인용 명단</code>은 확인코드가 들어 있으니 입장 스태프에게만 전달하고, GitHub에는 올리지 마세요.</li>
     </ol>
+
+    <div class="subhead">
+      <h3>실시간 입장 현황</h3>
+      <button class="ghost" id="btnDashLoad" type="button">현황 불러오기</button>
+    </div>
+    <p class="desc" id="dashInfo" style="margin-top:8px">누가 입장했는지 좌석 단위로 실시간 확인합니다. 좌석 칩을 누르면 수동으로 입장 처리/취소할 수 있습니다.</p>
+    <div id="dashBox" style="display:none">
+      <div class="dashsum">
+        <div class="dashnum" id="dashNums"></div>
+        <div class="pbar"><i id="dashBarIn"></i></div>
+      </div>
+      <div class="rosterbar">
+        <input id="dashSearch" type="text" placeholder="이름 · 연락처 검색">
+        <label class="autolab"><input type="checkbox" id="dashAuto" checked>자동 새로고침</label>
+      </div>
+      <div class="dashfilters" id="dashFilters">
+        <button type="button" data-f="all" class="on">전체</button>
+        <button type="button" data-f="none">미입장</button>
+        <button type="button" data-f="part">일부</button>
+        <button type="button" data-f="done">전원</button>
+      </div>
+      <div id="dashList"></div>
+      <div class="err" id="dashErr"></div>
+    </div>
 
     <div class="subhead">
       <h3>서버 명단 조회 · 수정</h3>
@@ -351,7 +436,10 @@ function qrSVG(text){
 }
 
 /* 티켓 렌더 */
+var curPerson = null;
+function escA(s){ return esc(s).replace(/"/g, '&quot;'); }
 function render(person){
+  curPerson = person;
   wmName = person.n;
   $('#hello').innerHTML = '<b>' + esc(person.n) + '</b>님, 초대 티켓 <b>' + person.t.length + '매</b>가 확인되었습니다.';
   var verifyURL = new URL('verify.html?c=' + person.c, location.href).href;
@@ -372,6 +460,7 @@ function render(person){
         '<div class="t-rule"></div>' +
         '<div class="t-zone' + small + '">' + esc(z) + '</div>' +
         '<div class="t-seat' + small + '">' + esc(s) + '</div>' +
+        '<div class="t-stamp"><span>입장 완료<small class="t-usedts"></small></span></div>' +
       '</div>' +
       '<div class="t-live">' +
         '<div class="t-qr" aria-label="스태프 검증용 QR"></div>' +
@@ -382,6 +471,12 @@ function render(person){
           '<div class="t-code">확인코드 <b>' + T.fmtCode(person.c) + '</b></div>' +
         '</div>' +
       '</div>' +
+      '<div class="t-check" data-z="' + escA(tk.z) + '" data-s="' + escA(tk.s) + '">' +
+        '<div class="t-state">입장 상태 확인 중…</div>' +
+        '<button class="t-staffbtn" type="button">입장 확인 (스태프)</button>' +
+      '</div>' +
+      '<div class="t-pin"><input type="password" inputmode="numeric" maxlength="12" placeholder="스태프 비밀번호"><button type="button">확인</button></div>' +
+      '<div class="t-checkmsg"></div>' +
       '<p class="t-notice">' + CFG.noticeLines.map(esc).join('<br>') + '</p>';
     el.querySelector('.t-qr').innerHTML = qrSVG(verifyURL);
     host.appendChild(el);
@@ -389,6 +484,8 @@ function render(person){
   tick();
   guestView = 'result';
   refresh();
+  startStatusPoll();
+  initGeo();
   window.scrollTo({ top: 0 });
 }
 
@@ -418,10 +515,142 @@ $('#form').addEventListener('submit', function(ev){
 
 $('#btnAgain').addEventListener('click', function(){
   guestView = 'lookup';
+  curPerson = null;
+  stopStatusPoll();
   $('#tickets').innerHTML = '';
   $('#inPhone').value = '';
+  $('#geoBadge').className = 'geo';
   refresh();
 });
+
+/* ==================== 입장 체크인 (관람객 화면) ==================== */
+function apiCheckin(payload){
+  return fetch('/api/checkin', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(Object.assign({ event: CFG.salt }, payload))
+  }).then(function(r){
+    return r.json().catch(function(){ return {}; }).then(function(j){
+      if (!r.ok) { var e = new Error(j.error || ('HTTP ' + r.status)); e.code = j.error; e.status = r.status; throw e; }
+      return j;
+    });
+  });
+}
+
+var statusTimer = null, statusFails = 0;
+function fmtTs(ts){
+  return new Date(ts).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+}
+function applyCheckins(seats){
+  var arts = document.querySelectorAll('#tickets .ticket');
+  for (var i = 0; i < arts.length; i++) {
+    var art = arts[i], row = art.querySelector('.t-check');
+    if (!row) continue;
+    var z = row.dataset.z, s = row.dataset.s, hit = null;
+    for (var k = 0; k < seats.length; k++) if (seats[k].z === z && seats[k].s === s) { hit = seats[k]; break; }
+    var state = row.querySelector('.t-state'), btn = row.querySelector('.t-staffbtn');
+    if (hit && hit.ts) {
+      art.classList.add('used');
+      state.innerHTML = '<b>입장 완료</b> · ' + fmtTs(hit.ts);
+      btn.style.display = 'none';
+      art.querySelector('.t-usedts').textContent = fmtTs(hit.ts) + ' 입장';
+      var pin = art.querySelector('.t-pin'); if (pin) pin.classList.remove('show');
+    } else {
+      art.classList.remove('used');
+      state.textContent = '미입장';
+      btn.style.display = '';
+    }
+  }
+}
+function hideCheckUI(){
+  var els = document.querySelectorAll('#tickets .t-check, #tickets .t-pin, #tickets .t-checkmsg');
+  for (var i = 0; i < els.length; i++) els[i].style.display = 'none';
+}
+function pollStatus(){
+  if (!curPerson) return;
+  apiCheckin({ action: 'status', code: curPerson.c }).then(function(j){
+    statusFails = 0;
+    applyCheckins(j.seats || []);
+  }).catch(function(e){
+    if (e.status === 404) { hideCheckUI(); stopStatusPoll(); return; } // 서버 저장소 미사용 환경
+    if (++statusFails >= 3) { hideCheckUI(); stopStatusPoll(); }
+  });
+}
+function startStatusPoll(){
+  stopStatusPoll();
+  statusFails = 0;
+  pollStatus();
+  statusTimer = setInterval(pollStatus, 10000);
+}
+function stopStatusPoll(){
+  if (statusTimer) { clearInterval(statusTimer); statusTimer = null; }
+}
+window.addEventListener('focus', function(){ if (curPerson) pollStatus(); });
+
+/* 스태프 입장 확인 버튼 (관람객 화면) — 비밀번호를 매번 입력 */
+$('#tickets').addEventListener('click', function(ev){
+  var t = ev.target;
+  if (t.classList.contains('t-staffbtn')) {
+    var art = t.closest('.ticket');
+    var pin = art.querySelector('.t-pin');
+    pin.classList.toggle('show');
+    if (pin.classList.contains('show')) pin.querySelector('input').focus();
+    return;
+  }
+  if (t.tagName === 'BUTTON' && t.closest('.t-pin')) {
+    doStaffCheckin(t.closest('.ticket'));
+  }
+});
+$('#tickets').addEventListener('keydown', function(ev){
+  if (ev.key === 'Enter' && ev.target.closest && ev.target.closest('.t-pin')) {
+    ev.preventDefault();
+    doStaffCheckin(ev.target.closest('.ticket'));
+  }
+});
+function doStaffCheckin(art){
+  var pin = art.querySelector('.t-pin'), inp = pin.querySelector('input');
+  var msg = art.querySelector('.t-checkmsg'), row = art.querySelector('.t-check');
+  msg.classList.remove('show');
+  var pw = inp.value.trim();
+  if (!pw) { msg.textContent = '스태프 비밀번호를 입력해 주세요.'; msg.classList.add('show'); return; }
+  var btn = pin.querySelector('button'); btn.disabled = true;
+  apiCheckin({ action: 'set', pw: pw, code: curPerson.c, z: row.dataset.z, s: row.dataset.s, on: true })
+    .then(function(j){
+      inp.value = '';
+      applyCheckins([{ z: row.dataset.z, s: row.dataset.s, ts: j.ts }]);
+      pollStatus();
+    }).catch(function(e){
+      msg.textContent = e.status === 401 ? '비밀번호가 올바르지 않습니다.' : apiErrMsg(e);
+      msg.classList.add('show');
+    }).finally(function(){ btn.disabled = false; });
+}
+
+/* 현장 위치 배지 (GPS — 실내에서는 부정확할 수 있어 참고용) */
+function initGeo(){
+  var b = $('#geoBadge');
+  if (!CFG.venue || !navigator.geolocation) { b.className = 'geo'; return; }
+  b.className = 'geo na show';
+  b.textContent = '📍 위치 확인 중…';
+  navigator.geolocation.getCurrentPosition(function(pos){
+    var d = distM(pos.coords.latitude, pos.coords.longitude, CFG.venue.lat, CFG.venue.lng);
+    if (d <= (CFG.venue.radiusM || 400)) {
+      b.className = 'geo ok show';
+      b.textContent = '📍 현장 인증 · ' + CFG.venue.name + ' (' + Math.round(d) + 'm)';
+    } else {
+      b.className = 'geo far show';
+      b.textContent = '📍 현장 밖 · ' + CFG.venue.name + '까지 ' + (d/1000).toFixed(1) + 'km';
+    }
+  }, function(){
+    b.className = 'geo na show';
+    b.textContent = '위치 확인 불가 — GPS 권한을 허용해 주세요 (실내에서는 부정확할 수 있음)';
+  }, { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 });
+}
+$('#geoBadge').addEventListener('click', initGeo);
+function distM(la1, lo1, la2, lo2){
+  var R = 6371000, r = Math.PI / 180;
+  var a = Math.sin((la2-la1)*r/2), b = Math.sin((lo2-lo1)*r/2);
+  var h = a*a + Math.cos(la1*r) * Math.cos(la2*r) * b*b;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
 
 /* ==================== 탭 & 관리자 ==================== */
 var ADMIN_HASH = '1f5e0b0c7f0baac5bf80d43beb3d259f1f22295960d0bc158e24bee738c72831';
@@ -701,6 +930,119 @@ $('#dlDb').addEventListener('click', function(){
 });
 $('#dlStaff').addEventListener('click', function(){
   XLSX.writeFile(staffBook, '스태프_확인용_명단.xlsx');
+});
+
+/* ==================== 실시간 입장 현황 (관리자) ==================== */
+var dashChecks = null, dashFilter = 'all', dashQuery = '', dashTimer = null, dashLoaded = false;
+
+function ensureRoster(){
+  if (serverPeople) return Promise.resolve();
+  return apiAdmin({ action: 'roster' }).then(function(j){
+    serverPeople = (j.roster && j.roster.people) || [];
+    rosterBuilt = (j.roster && j.roster.built) || '';
+  });
+}
+function dashRefresh(manual){
+  return ensureRoster().then(function(){
+    return apiCheckin({ action: 'list', pw: adminPw });
+  }).then(function(j){
+    dashChecks = j.checkins || {};
+    dashLoaded = true;
+    $('#dashErr').style.display = 'none';
+    renderDash();
+  }).catch(function(e){
+    if (manual) { var el = $('#dashErr'); el.textContent = '현황을 불러오지 못했습니다: ' + apiErrMsg(e); el.style.display = 'block'; }
+  });
+}
+function personStats(g){
+  var seats = (g.t || []).map(function(tk){
+    var ts = dashChecks[g.c + '|' + tk.z + '|' + tk.s] || null;
+    return { z: tk.z, s: tk.s, ts: ts };
+  });
+  var inN = seats.filter(function(x){ return x.ts; }).length;
+  var last = seats.reduce(function(m, x){ return (x.ts && (!m || x.ts > m)) ? x.ts : m; }, null);
+  var st = inN === 0 ? 'none' : (inN === seats.length ? 'done' : 'part');
+  return { seats: seats, inN: inN, total: seats.length, last: last, st: st };
+}
+function renderDash(){
+  if (!serverPeople || !dashChecks) return;
+  var rowsData = serverPeople.map(function(g){ return { g: g, x: personStats(g) }; });
+
+  var tIn = 0, tAll = 0, pDone = 0, pPart = 0, pNone = 0;
+  rowsData.forEach(function(r){
+    tIn += r.x.inN; tAll += r.x.total;
+    if (r.x.st === 'done') pDone++; else if (r.x.st === 'part') pPart++; else pNone++;
+  });
+  $('#dashNums').textContent = '입장 ' + tIn + ' / ' + tAll + '매 · 전원입장 ' + pDone + '명 · 일부 ' + pPart + '명 · 미입장 ' + pNone + '명';
+  $('#dashBarIn').style.width = (tAll ? Math.round(tIn / tAll * 100) : 0) + '%';
+
+  var q = dashQuery.toLowerCase();
+  var list = rowsData.filter(function(r){
+    if (dashFilter !== 'all' && r.x.st !== dashFilter) return false;
+    if (q && (r.g.n + ' ' + r.g.p).toLowerCase().indexOf(q) === -1) return false;
+    return true;
+  }).sort(function(a, b){
+    if (a.x.last !== b.x.last) return a.x.last ? (b.x.last ? (a.x.last > b.x.last ? -1 : 1) : -1) : 1;
+    return a.g.n.localeCompare(b.g.n, 'ko');
+  });
+
+  var host = $('#dashList'); host.innerHTML = '';
+  list.forEach(function(r){
+    var g = r.g, x = r.x;
+    var div = document.createElement('div');
+    div.className = 'p-row' + (x.st === 'done' ? ' done' : x.st === 'part' ? ' part' : '');
+    var head = document.createElement('div'); head.className = 'p-head';
+    head.innerHTML = '<b>' + esc(g.n) + '</b><span class="p-sub">뒤4 ' + esc(T.last4(g.p)) + ' · ' + x.inN + '/' + x.total + '매</span>' +
+      (x.last ? '<span class="p-time">최근 ' + fmtTs(x.last) + '</span>' : '<span class="p-time">미입장</span>');
+    div.appendChild(head);
+    var chips = document.createElement('div'); chips.className = 'p-chips';
+    x.seats.forEach(function(seat){
+      var c = document.createElement('button');
+      c.type = 'button';
+      c.className = 'chip' + (seat.ts ? ' in' : '');
+      c.textContent = String(seat.z).replace(/구역\s*$/, '') + ' · ' + seat.s + (seat.ts ? ' ✓' : '');
+      c.title = seat.ts ? fmtTs(seat.ts) + ' 입장 — 누르면 취소' : '누르면 입장 처리';
+      c.dataset.c = g.c; c.dataset.z = seat.z; c.dataset.s = seat.s; c.dataset.on = seat.ts ? '1' : '';
+      chips.appendChild(c);
+    });
+    div.appendChild(chips);
+    host.appendChild(div);
+  });
+  if (!list.length) host.innerHTML = '<p class="desc" style="margin-top:10px">조건에 맞는 인원이 없습니다.</p>';
+}
+
+$('#btnDashLoad').addEventListener('click', function(){
+  var btn = this; btn.disabled = true; btn.textContent = '불러오는 중…';
+  $('#dashBox').style.display = 'block';
+  dashRefresh(true).finally(function(){
+    btn.disabled = false; btn.textContent = '새로고침';
+    if (!dashTimer) dashTimer = setInterval(function(){
+      if ($('#dashAuto').checked && curTab === 'admin' && authed && dashLoaded) dashRefresh(false);
+    }, 8000);
+  });
+});
+$('#dashSearch').addEventListener('input', function(){ dashQuery = this.value.trim(); renderDash(); });
+$('#dashFilters').addEventListener('click', function(ev){
+  var b = ev.target.closest('button'); if (!b) return;
+  dashFilter = b.dataset.f;
+  var bs = this.querySelectorAll('button');
+  for (var i = 0; i < bs.length; i++) bs[i].classList.toggle('on', bs[i] === b);
+  renderDash();
+});
+$('#dashList').addEventListener('click', function(ev){
+  var c = ev.target.closest('.chip'); if (!c) return;
+  var on = !c.dataset.on;
+  if (!window.confirm(c.dataset.z + ' ' + c.dataset.s + ' — 입장 ' + (on ? '처리' : '취소') + '할까요?')) return;
+  c.disabled = true;
+  apiCheckin({ action: 'set', pw: adminPw, code: c.dataset.c, z: c.dataset.z, s: c.dataset.s, on: on })
+    .then(function(j){
+      var f = c.dataset.c + '|' + c.dataset.z + '|' + c.dataset.s;
+      if (j.ts) dashChecks[f] = j.ts; else delete dashChecks[f];
+      renderDash();
+    }).catch(function(e){
+      var el = $('#dashErr'); el.textContent = '처리 실패: ' + apiErrMsg(e); el.style.display = 'block';
+      c.disabled = false;
+    });
 });
 
 /* ==================== 서버 명단 조회 · 수정 ==================== */

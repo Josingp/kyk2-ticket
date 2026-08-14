@@ -48,13 +48,34 @@ function checkPw(pw) {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
-/* IP당 10분에 30회 제한 (관리자 API 무차별 대입 방지) */
-async function rateLimit(req) {
-  const ip = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 'unknown';
-  const key = 'tickets:rl:' + ip;
+function clientIp(req) {
+  return String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 'unknown';
+}
+
+/* 비밀번호 무차별 대입 방지: 실패만 집계, 10분에 20회 초과 시 차단 */
+async function pwBlocked(req) {
+  const n = parseInt(await redis(['GET', 'tickets:fail:' + clientIp(req)]) || '0', 10);
+  return n > 20;
+}
+async function notePwFail(req) {
+  const key = 'tickets:fail:' + clientIp(req);
   const n = await redis(['INCR', key]);
   if (n === 1) await redis(['EXPIRE', key, '600']);
-  return n <= 30;
+}
+
+/* 인증 없는 엔드포인트 남용 방지 (여유 있는 한도 — 폴링 허용) */
+async function softLimit(req, max) {
+  const key = 'tickets:sl:' + clientIp(req);
+  const n = await redis(['INCR', key]);
+  if (n === 1) await redis(['EXPIRE', key, '600']);
+  return n <= (max || 900);
+}
+
+/* 서버 저장 명단 로드 */
+async function getRoster(ev) {
+  const v = await redis(['GET', 'tickets:' + ev + ':roster']);
+  if (!v) return null;
+  try { return JSON.parse(v); } catch (e) { return null; }
 }
 
 function readBody(req) {
@@ -63,4 +84,4 @@ function readBody(req) {
   return (b && typeof b === 'object') ? b : {};
 }
 
-module.exports = { redis, sanitizeEvent, checkPw, rateLimit, readBody };
+module.exports = { redis, sanitizeEvent, checkPw, pwBlocked, notePwFail, softLimit, getRoster, readBody };

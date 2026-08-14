@@ -8,7 +8,7 @@
    - roster  : 서버에 저장된 명단(평문, Redis 내부에만 존재) 반환
    - publish : 새 DB(암호문) + 명단을 Redis에 저장 → 즉시 반영
    ============================================================ */
-const { redis, sanitizeEvent, checkPw, rateLimit, readBody } = require('./_lib');
+const { redis, sanitizeEvent, checkPw, pwBlocked, notePwFail, readBody } = require('./_lib');
 
 const MAX_BYTES = 950000; // Upstash 요청 한도(1MB) 보호
 
@@ -19,8 +19,8 @@ module.exports = async (req, res) => {
   if (!ev) { res.status(400).json({ error: 'bad_event' }); return; }
 
   try {
-    if (!(await rateLimit(req))) { res.status(429).json({ error: 'too_many_attempts' }); return; }
-    if (!checkPw(body.pw)) { res.status(401).json({ error: 'unauthorized' }); return; }
+    if (await pwBlocked(req)) { res.status(429).json({ error: 'too_many_attempts' }); return; }
+    if (!checkPw(body.pw)) { await notePwFail(req); res.status(401).json({ error: 'unauthorized' }); return; }
 
     const K = 'tickets:' + ev;
 
