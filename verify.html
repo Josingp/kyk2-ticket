@@ -39,6 +39,8 @@ button:disabled{opacity:.5}
 #out li{font:700 17px var(--disp);color:#26243f;padding:6px 0;border-bottom:1px dashed #bcd8c5}
 #out li:last-child{border-bottom:0}
 #out .hint{font-size:12.5px;margin-top:12px;line-height:1.6}
+.secpat{display:flex;align-items:center;gap:7px;margin-top:12px;font:800 13px var(--body)}
+.secpat i{width:14px;height:14px;border-radius:99px;display:inline-block}
 #out li{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 #out li .seat{flex:1;min-width:120px}
 #out li .st{font:700 11.5px var(--body);color:#8a6d3b}
@@ -190,7 +192,8 @@ function check(codeRaw){
       '<div class="name">' + esc(p.n) + '</div>' +
       '<ul>' + seats + '</ul>' +
       '<div class="staffbox" id="sb"></div>' +
-      '<div class="hint">관람객 화면의 이름·좌석·코드(<b>' + T.fmtCode(code) + '</b>)와 일치하는지, 시계가 움직이는지 확인하세요. 입장 처리된 좌석은 관람객 화면에서도 회색으로 바뀝니다.</div>');
+      '<div class="secpat" id="vPat"></div>' +
+      '<div class="hint">관람객 화면의 이름·좌석·코드(<b>' + T.fmtCode(code) + '</b>)와 일치하는지, 시계가 움직이는지, <b>보안 패턴(색·단어)</b>이 위와 같은지 확인하세요. 셋 중 하나라도 다르면 캡처·위조입니다.</div>');
     renderStaffBox();
     refreshStates();
     if (pollT) clearInterval(pollT);
@@ -229,7 +232,7 @@ $('#out').addEventListener('click', function(ev){
     if (!pw) return sbErr('비밀번호를 입력해 주세요.');
     t.disabled = true;
     fetch('/api/admin', { method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ action:'verify', pw: pw, event: CFG.salt }) })
+      body: JSON.stringify({ action:'verify', scope:'staff', pw: pw, event: CFG.salt }) })
     .then(function(r){
       if (r.ok){
         return r.json().catch(function(){ return {}; }).then(function(j){
@@ -263,6 +266,14 @@ $('#out').addEventListener('click', function(ev){
     renderStaffBox();
   }
 });
+
+var SEC_PATTERNS = [['하늘','#38bdf8'],['주황','#fb923c'],['보라','#a78bfa'],['초록','#34d399'],['분홍','#f472b6'],['금색','#eab308']];
+setInterval(function(){
+  var el = document.getElementById('vPat');
+  if (!el) return;
+  var p = SEC_PATTERNS[Math.floor(Date.now() / 30000) % SEC_PATTERNS.length];
+  el.innerHTML = '<i style="background:' + p[1] + '"></i>지금 보안 패턴 · ' + p[0];
+}, 1000);
 
 document.addEventListener('visibilitychange', function(){ if (!document.hidden) refreshStates(); });
 

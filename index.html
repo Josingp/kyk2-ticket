@@ -338,7 +338,11 @@ footer{margin-top:34px;text-align:center;color:#7672ab;font-size:11.5px;line-hei
     <form id="adminForm" autocomplete="off">
       <div class="field">
         <label for="adminPw">비밀번호</label>
-        <input id="adminPw" type="password" inputmode="numeric" maxlength="12" placeholder="비밀번호" required>
+        <input id="adminPw" type="password" inputmode="numeric" maxlength="24" placeholder="비밀번호" required>
+      </div>
+      <div class="field">
+        <label for="adminOtp">인증앱 OTP 6자리 <small style="font-weight:600;color:#8985ab">(OTP 설정 시)</small></label>
+        <input id="adminOtp" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="000000">
       </div>
       <button class="primary" type="submit">로그인</button>
       <p class="msg" id="adminMsg"></p>
@@ -553,7 +557,8 @@ function render(person){
           '<div class="t-livehead"><span class="dot"></span>LIVE</div>' +
           '<div class="t-clock js-clock">--:--:--</div>' +
           '<div class="t-date js-date"></div>' +
-          '<div class="t-code">확인코드 <b>' + T.fmtCode(person.c) + '</b></div>' +
+          '<div class="t-code">확인코드 <b class="t-codeval" data-full="' + escA(T.fmtCode(person.c)) + '">' + esc(T.fmtCode(person.c)) + '</b></div>' +
+          '<div class="t-secpat"><i></i><span></span></div>' +
         '</div>' +
       '</div>' +
       '<div class="t-check" data-z="' + escA(tk.z) + '" data-s="' + escA(tk.s) + '">' +
@@ -685,6 +690,50 @@ function stopStatusPoll(){
   if (statusTimer) { clearInterval(statusTimer); statusTimer = null; }
 }
 window.addEventListener('focus', function(){ if (curPerson) pollStatus(); });
+
+/* ---- 캡처 대응 ---- */
+/* 확인코드 회전 마스킹: 어느 순간에도 전체 코드가 화면에 없어 스크린샷이 불완전해짐.
+   길게 누르면 잠시 전체 표시(수동 대조용). */
+var maskIdx = 0;
+setInterval(function(){
+  maskIdx++;
+  var els = document.querySelectorAll('.t-codeval');
+  for (var i = 0; i < els.length; i++){
+    var el = els[i], full = el.dataset.full || '';
+    if (el.dataset.hold === '1' || !full){ el.textContent = full; continue; }
+    var pos = [], k;
+    for (k = 0; k < full.length; k++) if (full[k] !== '-') pos.push(k);
+    var hide = pos[maskIdx % pos.length];
+    var out = '';
+    for (k = 0; k < full.length; k++) out += (k === hide ? '•' : full[k]);
+    el.textContent = out;
+  }
+}, 650);
+$('#tickets').addEventListener('pointerdown', function(ev){
+  var el = ev.target.closest && ev.target.closest('.t-codeval');
+  if (el){ el.dataset.hold = '1'; el.textContent = el.dataset.full; }
+});
+['pointerup','pointercancel','pointerleave'].forEach(function(evn){
+  document.addEventListener(evn, function(){
+    var els = document.querySelectorAll('.t-codeval[data-hold="1"]');
+    for (var i = 0; i < els.length; i++) delete els[i].dataset.hold;
+  });
+});
+/* 우클릭·드래그·선택 차단 (억제 목적) */
+$('#tickets').addEventListener('contextmenu', function(ev){ ev.preventDefault(); });
+$('#tickets').addEventListener('dragstart', function(ev){ ev.preventDefault(); });
+
+/* 30초 주기 보안 패턴: 스태프 검증 화면과 색·단어가 일치해야 유효 (오래된 캡처는 불일치) */
+var SEC_PATTERNS = [['하늘','#38bdf8'],['주황','#fb923c'],['보라','#a78bfa'],['초록','#34d399'],['분홍','#f472b6'],['금색','#eab308']];
+function secPat(){ return SEC_PATTERNS[Math.floor(Date.now() / 30000) % SEC_PATTERNS.length]; }
+setInterval(function(){
+  var p = secPat();
+  var els = document.querySelectorAll('.t-secpat');
+  for (var i = 0; i < els.length; i++){
+    els[i].querySelector('i').style.background = p[1];
+    els[i].querySelector('span').textContent = '보안 패턴 · ' + p[0];
+  }
+}, 1000);
 /* 화면이 백그라운드로 가면 폴링 중단, 다시 보이면 즉시 갱신 — 서버 부하와 배터리 절약 */
 document.addEventListener('visibilitychange', function(){
   if (document.hidden) stopStatusPoll();
@@ -1123,10 +1172,10 @@ $('#adminForm').addEventListener('submit', function(ev){
 
   fetch('/api/admin', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'verify', pw: pw, event: CFG.salt })
+    body: JSON.stringify({ action: 'verify', pw: pw, otp: $('#adminOtp').value.trim() || undefined, event: CFG.salt })
   }).then(function(r){
     if (r.ok) return r.json().then(function(j){ return { v: 'ok', session: j.session || '', encrypted: j.encrypted }; });
-    if (r.status === 401) return { v: 'no' };
+    if (r.status === 401) return r.json().catch(function(){ return {}; }).then(function(j){ return { v: j.error === 'otp_required' ? 'otp' : 'no' }; });
     if (r.status === 429) return { v: 'limit' };
     throw 0;
   }).catch(function(){
@@ -1145,13 +1194,17 @@ $('#adminForm').addEventListener('submit', function(ev){
         try { sessionStorage.setItem('kyk2AdminOK', '1'); sessionStorage.setItem('kyk2AdminPw', pw); } catch(e){}
       }
       $('#adminPw').value = '';
+      $('#adminOtp').value = '';
       refresh();
       setEncWarn(rv.encrypted);
     } else {
-      m.textContent = v === 'limit' ? '시도가 너무 많습니다. 10분 뒤 다시 시도해 주세요.' : '비밀번호가 올바르지 않습니다.';
+      m.textContent = v === 'limit' ? '시도가 너무 많습니다. 10분 뒤 다시 시도해 주세요.'
+        : v === 'otp' ? '인증앱(Microsoft Authenticator)의 6자리 OTP를 함께 입력해 주세요.'
+        : '비밀번호가 올바르지 않습니다.';
       m.classList.add('show');
       $('#adminPw').value = '';
-      $('#adminPw').focus();
+      if (v !== 'otp') $('#adminOtp').value = '';
+      (v === 'otp' ? $('#adminOtp') : $('#adminPw')).focus();
     }
   }).finally(function(){ btn.disabled = false; });
 });
