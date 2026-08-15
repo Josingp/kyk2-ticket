@@ -121,18 +121,31 @@ function totpAt(secretB32, tSec) {
   const n = (((h[o] & 127) << 24) | (h[o+1] << 16) | (h[o+2] << 8) | h[o+3]) % 1000000;
   return String(n).padStart(6, '0');
 }
-function verifyTotp(code) {
+/* 일치하면 해당 30초 카운터를 반환(재사용 차단용), 불일치면 null */
+function verifyTotpCounter(code) {
   const s = process.env.TOTP_SECRET;
-  if (!s) return false;
+  if (!s) return null;
   code = String(code || '').replace(/\D/g, '');
-  if (code.length !== 6) return false;
+  if (code.length !== 6) return null;
   const now = Math.floor(Date.now() / 1000);
   for (let w = -1; w <= 1; w++) {
-    const want = totpAt(s, now + w * 30);
+    const t = now + w * 30;
+    const want = totpAt(s, t);
     if (want.length === code.length &&
-        crypto.timingSafeEqual(Buffer.from(want), Buffer.from(code))) return true;
+        crypto.timingSafeEqual(Buffer.from(want), Buffer.from(code)))
+      return Math.floor(t / 30);
   }
-  return false;
+  return null;
+}
+function verifyTotp(code) { return verifyTotpCounter(code) != null; }
+
+/* 감사 로그(접속기록) — 관리자 행위를 Redis 리스트에 최근 1000건 보관 */
+async function audit(ev, act, req, extra) {
+  try {
+    const row = Object.assign({ t: Date.now(), a: act, ip: clientIp(req) }, extra || {});
+    await redis(['LPUSH', 'tickets:' + ev + ':log', JSON.stringify(row)]);
+    await redis(['LTRIM', 'tickets:' + ev + ':log', '0', '999']);
+  } catch (e) {}
 }
 /* OTP 강제 여부: TOTP_SECRET + DATA_KEY(세션용) 둘 다 있어야 활성화 */
 function totpOn() { return !!(process.env.TOTP_SECRET && dataKey()); }
@@ -226,4 +239,4 @@ function readBody(req) {
 
 module.exports = { redis, sanitizeEvent, checkPw, pwBlocked, notePwFail, softLimit, getRoster, readBody,
   getRosterCached, getDbCached, getHashCached, bustKey, bustEvent, memLimit,
-  encryptStr, decryptStr, dataKey, makeSession, checkSession, totpAt, verifyTotp, totpOn };
+  encryptStr, decryptStr, dataKey, makeSession, checkSession, totpAt, verifyTotp, verifyTotpCounter, totpOn, audit, clientIp };

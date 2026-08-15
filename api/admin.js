@@ -8,8 +8,8 @@
    - roster  : 서버에 저장된 명단(평문, Redis 내부에만 존재) 반환
    - publish : 새 DB(암호문) + 명단을 Redis에 저장 → 즉시 반영
    ============================================================ */
-const { redis, sanitizeEvent, checkPw, pwBlocked, notePwFail, readBody, getRosterCached, bustEvent,
-  encryptStr, dataKey, makeSession, checkSession, verifyTotp, totpOn } = require('./_lib');
+const { redis, sanitizeEvent, checkPw, pwBlocked, notePwFail, readBody, getRoster, getRosterCached, bustEvent,
+  encryptStr, dataKey, makeSession, checkSession, verifyTotpCounter, totpOn, audit } = require('./_lib');
 
 const MAX_BYTES = 950000; // Upstash 요청 한도(1MB) 보호
 
@@ -27,8 +27,15 @@ module.exports = async (req, res) => {
       if (!checkPw(body.pw)) { await notePwFail(req); res.status(401).json({ error: 'unauthorized' }); return; }
       if (body.scope === 'staff') role = 's';
       else if (!totpOn()) role = 'a';
-      else if (verifyTotp(body.otp)) role = 'a';
-      else { await notePwFail(req); res.status(401).json({ error: 'otp_required' }); return; }
+      else {
+        const ctr = verifyTotpCounter(body.otp);
+        if (ctr == null) { await notePwFail(req); res.status(401).json({ error: 'otp_required' }); return; }
+        /* 같은 OTP 코드 재사용 차단 (어깨너머 훔쳐보기 30초 재입력 방지) */
+        const last = parseInt(await redis(['GET', 'tickets:otpc']) || '0', 10);
+        if (ctr <= last) { await notePwFail(req); res.status(401).json({ error: 'otp_required' }); return; }
+        await redis(['SET', 'tickets:otpc', String(ctr)]);
+        role = 'a';
+      }
     }
     const isAdmin = role === 'a';
 
@@ -37,9 +44,20 @@ module.exports = async (req, res) => {
     if (body.action === 'verify') {
       /* DATA_KEY 설정 시 세션 토큰 발급 → 브라우저에 비밀번호를 남기지 않음
          관리자 6시간, 스태프 12시간(행사 당일 재로그인 최소화) */
+      if (!body.tk) audit(ev, 'login', req, { role: role });
       res.status(200).json({ ok: true, role: role,
         session: makeSession(isAdmin ? 6 : 12, role),
-        otpRequired: totpOn(), encrypted: !!dataKey() });
+        otpRequired: totpOn(), encrypted: !!dataKey(), now: Date.now() });
+      return;
+    }
+
+    /* 감사 로그 열람 (관리자) */
+    if (body.action === 'log') {
+      if (!isAdmin) { res.status(403).json({ error: 'forbidden' }); return; }
+      const raw = await redis(['LRANGE', 'tickets:' + ev + ':log', '0', '199']) || [];
+      const rows = [];
+      for (const r0 of raw) { try { rows.push(JSON.parse(r0)); } catch (e) {} }
+      res.status(200).json({ ok: true, rows });
       return;
     }
 
@@ -57,6 +75,7 @@ module.exports = async (req, res) => {
       for (const k of ['db', 'roster', 'checkin', 'share'])
         await redis(['DEL', K + ':' + k]);
       bustEvent(ev);
+      audit(ev, 'destroy', req, {});   /* 파기 사실 자체는 기록으로 남김 */
       res.status(200).json({ ok: true });
       return;
     }
@@ -66,6 +85,15 @@ module.exports = async (req, res) => {
       if (!db || typeof db !== 'object' || !db.records || !db.verify) {
         res.status(400).json({ error: 'bad_db' }); return;
       }
+      /* 동시 수정 충돌 감지: 클라이언트가 비교 기준으로 삼은 명단(baseBuilt)이
+         현재 서버 명단과 다르면 409 → 클라이언트가 최신본으로 다시 비교 후 재시도 */
+      if (body.baseBuilt !== undefined) {
+        const cur = await getRoster(ev);
+        const curBuilt = cur ? cur.built || null : null;
+        if ((body.baseBuilt || null) !== curBuilt) {
+          res.status(409).json({ error: 'conflict' }); return;
+        }
+      }
       const dbStr = JSON.stringify(db);
       const roStr = JSON.stringify(roster || null);
       if (dbStr.length > MAX_BYTES || roStr.length > MAX_BYTES) {
@@ -74,6 +102,7 @@ module.exports = async (req, res) => {
       await redis(['SET', K + ':db', dbStr]);
       await redis(['SET', K + ':roster', encryptStr(roStr)]);
       bustEvent(ev);
+      audit(ev, 'publish', req, { p: roster && roster.people ? roster.people.length : 0 });
       res.status(200).json({ ok: true, people: roster && roster.people ? roster.people.length : null,
         records: Object.keys(db.records).length, encrypted: !!dataKey() });
       return;

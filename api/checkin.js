@@ -11,7 +11,7 @@
    - set    : 입장 처리/취소. { event, pw, code, z, s, on }
               스태프/관리자 비밀번호 필요. 명단에 있는 좌석만 허용.
    ============================================================ */
-const { redis, sanitizeEvent, checkPw, pwBlocked, notePwFail, checkSession, getRosterCached, getHashCached, bustKey, memLimit, readBody } = require('./_lib');
+const { redis, sanitizeEvent, checkPw, pwBlocked, notePwFail, checkSession, getRosterCached, getHashCached, bustKey, memLimit, readBody, audit } = require('./_lib');
 
 const norm = v => String(v == null ? '' : v).trim();
 const normCode = v => norm(v).replace(/[^0-9a-zA-Z]/g, '').toUpperCase();
@@ -38,7 +38,7 @@ module.exports = async (req, res) => {
         z: norm(tk.z), s: norm(tk.s),
         ts: map[person.c + '|' + norm(tk.z) + '|' + norm(tk.s)] || null,
       }));
-      res.status(200).json({ ok: true, seats });
+      res.status(200).json({ ok: true, seats, now: Date.now() });
       return;
     }
 
@@ -69,7 +69,7 @@ module.exports = async (req, res) => {
 
     if (body.action === 'list') {
       const checkins = await getHashCached('checkin', ev, 2000);
-      res.status(200).json({ ok: true, checkins });
+      res.status(200).json({ ok: true, checkins, now: Date.now() });
       return;
     }
 
@@ -84,6 +84,7 @@ module.exports = async (req, res) => {
       if (!valid) { res.status(404).json({ error: 'unknown_seat' }); return; }
       await redis(['HDEL', K, person.c + '|' + z + '|' + s]);
       bustKey('checkin', ev);
+      audit(ev, 'cancel', req, { z: z, s: s });
       res.status(200).json({ ok: true, ts: null });
       return;
     }
