@@ -85,6 +85,15 @@ button:disabled{opacity:.5}
 var CFG = window.TICKET_CONFIG, T = window.TCrypto;
 var $ = function(s){ return document.querySelector(s); };
 var DB = null, dbErr = null;
+var freshTried = false;
+function refreshDBFresh(){
+  if (freshTried) return Promise.resolve(false);
+  freshTried = true;
+  return fetch('/api/db?event=' + encodeURIComponent(CFG.salt) + '&fresh=' + Date.now())
+    .then(function(r){ if(!r.ok) throw 0; return r.json(); })
+    .then(function(j){ DB = j; return true; })
+    .catch(function(){ return false; });
+}
 var ready = fetch('/api/db?event=' + encodeURIComponent(CFG.salt))
   .then(function(r){ if(!r.ok) throw 0; return r.json(); })
   .catch(function(){
@@ -156,6 +165,7 @@ function renderStates(seats){
 function refreshStates(){
   if (!curCode || checkinOff) return;
   apiCheckin({ action:'status', code: curCode }).then(function(j){
+    if (j.now) timeOffset = j.now - Date.now();
     renderStates(j.seats||[]);
   }).catch(function(e){
     if (e.status===404 || e.code==='redis_env_missing'){
@@ -177,8 +187,13 @@ function check(codeRaw){
     return T.deriveVerify(code, CFG);
   }).then(function(d){
     var box = DB.verify && DB.verify[d.id];
-    if (!box) throw 0;
-    return T.decryptJSON(d.key, box);
+    if (box) return T.decryptJSON(d.key, box);
+    /* 최신 DB로 1회 재시도 (방금 발행된 코드 대응) */
+    return refreshDBFresh().then(function(got){
+      var b2 = got && DB.verify && DB.verify[d.id];
+      if (!b2) throw 0;
+      return T.decryptJSON(d.key, b2);
+    });
   }).then(function(p){
     curCode = code; checkinOff = false;
     var seats = p.t.map(function(tk){
@@ -268,10 +283,11 @@ $('#out').addEventListener('click', function(ev){
 });
 
 var SEC_PATTERNS = [['하늘','#38bdf8'],['주황','#fb923c'],['보라','#a78bfa'],['초록','#34d399'],['분홍','#f472b6'],['금색','#eab308']];
+var timeOffset = 0;
 setInterval(function(){
   var el = document.getElementById('vPat');
   if (!el) return;
-  var p = SEC_PATTERNS[Math.floor(Date.now() / 30000) % SEC_PATTERNS.length];
+  var p = SEC_PATTERNS[Math.floor((Date.now() + timeOffset) / 30000) % SEC_PATTERNS.length];
   el.innerHTML = '<i style="background:' + p[1] + '"></i>지금 보안 패턴 · ' + p[0];
 }, 1000);
 

@@ -435,6 +435,13 @@ footer{margin-top:34px;text-align:center;color:#7672ab;font-size:11.5px;line-hei
     <button class="dangerbtn" id="btnDestroy" type="button">행사 데이터 전체 파기</button>
     <div class="err" id="destroyErr"></div>
     <div class="done" id="destroyDone"></div>
+
+    <div class="subhead"><h3>감사 로그</h3><button class="ghost" id="btnAudit" type="button">최근 기록 보기</button></div>
+    <p class="desc" style="margin-top:8px">로그인·명단 발행·입장 취소·파기 기록(시각·IP)이 최근 1,000건 보관됩니다.</p>
+    <div class="tablewrap" id="auditBox" style="display:none"><table class="roster" style="min-width:420px">
+      <thead><tr><th>시각</th><th>행위</th><th>상세</th><th>IP</th></tr></thead>
+      <tbody id="auditBody"></tbody>
+    </table></div>
   </section>
 
   <!-- 개인정보 처리 안내 -->
@@ -483,7 +490,7 @@ document.title = CFG.eventName + ' · 모바일 초대 티켓';
 
 /* DB 로드 — 서버(API) 우선, 실패 시 저장소 파일 */
 var DB = null, dbErr = null;
-fetch('/api/db?event=' + encodeURIComponent(CFG.salt))
+var dbReady = fetch('/api/db?event=' + encodeURIComponent(CFG.salt))
   .then(function(r){ if(!r.ok) throw 0; return r.json(); })
   .catch(function(){
     return fetch('data/db.json?v=' + Date.now())
@@ -491,6 +498,16 @@ fetch('/api/db?event=' + encodeURIComponent(CFG.salt))
   })
   .then(function(j){ DB = j; })
   .catch(function(e){ dbErr = e; });
+var freshTried = false;
+/* 방금 명단에 추가된 사람: 엣지 캐시(최대 75초)를 우회해 최신 DB로 1회 재시도 */
+function refreshDBFresh(){
+  if (freshTried) return Promise.resolve(false);
+  freshTried = true;
+  return fetch('/api/db?event=' + encodeURIComponent(CFG.salt) + '&fresh=' + Date.now())
+    .then(function(r){ if(!r.ok) throw 0; return r.json(); })
+    .then(function(j){ DB = j; return true; })
+    .catch(function(){ return false; });
+}
 
 /* 표기 보정 */
 function zoneText(z){ z = String(z||'').trim(); return /구역/.test(z) ? z : z + ' 구역'; }
@@ -598,20 +615,37 @@ $('#form').addEventListener('submit', function(ev){
   var name = $('#inName').value, phone = $('#inPhone').value;
   if (!T.normName(name)) return showMsg('이름을 입력해 주세요.');
   if (T.last4(phone).length < 4) return showMsg('연락처 뒤 4자리를 숫자로 입력해 주세요.');
-  if (dbErr) return showMsg('티켓 데이터를 불러오지 못했습니다. 안내받은 주소로 다시 접속해 주세요.');
-  if (!DB) return showMsg('데이터를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.');
   var btn = $('#btnGo'); btn.disabled = true; btn.textContent = '확인 중…';
-  T.deriveRecord(name, phone, CFG).then(function(d){
-    var box = DB.records && DB.records[d.id];
-    if (!box) throw 0;
-    return T.decryptJSON(d.key, box);
-  }).then(function(person){
-    render(person);
-  }).catch(function(){
-    showMsg('입력하신 정보와 일치하는 티켓이 없습니다. 초대 안내를 받은 이름과 연락처인지 확인해 주세요.');
-  }).finally(function(){
-    btn.disabled = false; btn.textContent = '티켓 확인';
-  });
+
+  function attempt(){
+    return T.deriveRecord(name, phone, CFG).then(function(d){
+      var box = DB && DB.records && DB.records[d.id];
+      if (!box) return null;
+      return T.decryptJSON(d.key, box).catch(function(){ return null; });
+    });
+  }
+  /* DB 로드를 최대 8초 기다렸다가 조회 (로드 전 제출해도 자동 진행) */
+  Promise.race([dbReady, new Promise(function(r){ setTimeout(r, 8000); })])
+    .then(function(){
+      if (dbErr) { showMsg('티켓 데이터를 불러오지 못했습니다. 안내받은 주소로 다시 접속해 주세요.'); throw 'handled'; }
+      if (!DB) { showMsg('데이터를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.'); throw 'handled'; }
+      return attempt();
+    })
+    .then(function(person){
+      if (person) return person;
+      /* 미발견 → 방금 추가된 인원일 수 있으니 최신 DB로 1회 재시도 */
+      return refreshDBFresh().then(function(got){ return got ? attempt() : null; });
+    })
+    .then(function(person){
+      if (!person) { showMsg('입력하신 정보와 일치하는 티켓이 없습니다. 초대 안내를 받은 이름과 연락처인지 확인해 주세요.'); return; }
+      render(person);
+    })
+    .catch(function(e){
+      if (e !== 'handled') showMsg('확인 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
+    })
+    .finally(function(){
+      btn.disabled = false; btn.textContent = '티켓 확인';
+    });
 });
 
 $('#btnAgain').addEventListener('click', function(){
@@ -673,10 +707,14 @@ function pollStatus(){
   if (!curPerson) return;
   apiCheckin({ action: 'status', code: curPerson.c }).then(function(j){
     statusFails = 0;
+    if (j.now) timeOffset = j.now - Date.now();   /* 서버 시간 동기화(보안 패턴 오판 방지) */
     applyCheckins(j.seats || []);
   }).catch(function(e){
-    if (e.status === 404) { hideCheckUI(); stopStatusPoll(); return; } // 서버 저장소 미사용 환경
-    if (++statusFails >= 3) { hideCheckUI(); stopStatusPoll(); }
+    if (e.status === 404) { hideCheckUI(); stopStatusPoll(); return; } // 서버 미사용/명단 밖
+    /* 일시적 네트워크 오류: UI는 유지하고 계속 재시도 (현장 LTE 불안정 대비) */
+    statusFails++;
+    var sts = document.querySelectorAll('#tickets .ticket:not(.used) .t-state');
+    for (var i = 0; i < sts.length; i++) sts[i].textContent = '연결 대기 중… (자동 재시도)';
   });
 }
 function startStatusPoll(){
@@ -725,7 +763,8 @@ $('#tickets').addEventListener('dragstart', function(ev){ ev.preventDefault(); }
 
 /* 30초 주기 보안 패턴: 스태프 검증 화면과 색·단어가 일치해야 유효 (오래된 캡처는 불일치) */
 var SEC_PATTERNS = [['하늘','#38bdf8'],['주황','#fb923c'],['보라','#a78bfa'],['초록','#34d399'],['분홍','#f472b6'],['금색','#eab308']];
-function secPat(){ return SEC_PATTERNS[Math.floor(Date.now() / 30000) % SEC_PATTERNS.length]; }
+var timeOffset = 0;   /* 서버-기기 시계 차이 보정 */
+function secPat(){ return SEC_PATTERNS[Math.floor((Date.now() + timeOffset) / 30000) % SEC_PATTERNS.length]; }
 setInterval(function(){
   var p = secPat();
   var els = document.querySelectorAll('.t-secpat');
@@ -1081,6 +1120,29 @@ $('#btnDestroy').addEventListener('click', function(){
   }).finally(function(){ btn.disabled = false; });
 });
 
+/* 감사 로그 */
+$('#btnAudit').addEventListener('click', function(){
+  var btn = this; btn.disabled = true;
+  apiAdmin({ action: 'log' }).then(function(j){
+    var tb = $('#auditBody'); tb.innerHTML = '';
+    var names = { login: '로그인', publish: '명단 발행', destroy: '데이터 파기', cancel: '입장 취소' };
+    (j.rows || []).forEach(function(r){
+      var tr = document.createElement('tr');
+      var det = r.role ? ('역할 ' + (r.role === 'a' ? '관리자' : '스태프'))
+        : r.p != null ? (r.p + '명') : (r.z ? r.z + ' ' + r.s : '');
+      tr.innerHTML = '<td style="padding:7px 6px;font-size:11px;white-space:nowrap">' + new Date(r.t).toLocaleString('ko-KR', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' }) + '</td>' +
+        '<td style="padding:7px 6px;font-size:11.5px;font-weight:700">' + esc(names[r.a] || r.a) + '</td>' +
+        '<td style="padding:7px 6px;font-size:11px">' + esc(det) + '</td>' +
+        '<td style="padding:7px 6px;font-size:10.5px;color:#8985ab">' + esc(r.ip || '') + '</td>';
+      tb.appendChild(tr);
+    });
+    if (!(j.rows || []).length) tb.innerHTML = '<tr><td colspan="4" style="padding:10px;font-size:12px;color:#8985ab">기록이 없습니다.</td></tr>';
+    $('#auditBox').style.display = 'block';
+  }).catch(function(e){
+    window.alert('로그를 불러오지 못했습니다: ' + apiErrMsg(e));
+  }).finally(function(){ btn.disabled = false; });
+});
+
 /* 개인정보 처리 안내 모달 */
 $('#btnPrivacy').addEventListener('click', function(){ $('#pModal').style.display = 'flex'; });
 $('#btnPrivacyClose').addEventListener('click', function(){ $('#pModal').style.display = 'none'; });
@@ -1139,9 +1201,15 @@ function sha256Hex(str){
     return out;
   });
 }
+/* 엑셀 숫자 셀에서 앞자리 0이 사라진 경우 복구: 1012345678 → 01012345678 */
+function normPhone(p){
+  var d = String(p == null ? '' : p).replace(/\D/g, '');
+  if (d.length === 10 && /^1[016-9]/.test(d)) d = '0' + d;
+  return d;
+}
 /* 전화번호 최소화 저장: 가운데 자리를 버리고 앞3+뒤4만 보관 (조회·운영에 충분) */
 function maskPhone(p){
-  var d = String(p == null ? '' : p).replace(/\D/g, '');
+  var d = normPhone(p);
   if (d.length >= 7) return d.slice(0, 3) + '****' + d.slice(-4);
   return d;
 }
@@ -1161,6 +1229,7 @@ function apiErrMsg(e){
   if (e && e.status === 429) return '시도가 너무 많습니다. 10분 뒤 다시 시도해 주세요.';
   if (e && e.status === 401) return '비밀번호가 올바르지 않습니다. 로그아웃 후 다시 로그인해 주세요.';
   if (e && e.status === 413) return '명단이 너무 커서 한 번에 저장할 수 없습니다. (약 1MB 초과)';
+  if (e && e.status === 409) return '다른 기기에서 방금 명단이 수정되었습니다. [명단 불러오기]로 최신본을 확인한 뒤 다시 적용해 주세요.';
   return '서버에 연결하지 못했습니다. 네트워크를 확인해 주세요.';
 }
 
@@ -1324,12 +1393,13 @@ function tixCanon(t){
     return [String(tk.z).trim(), String(tk.s).trim(), tk.g || '', tk.b || ''];
   }));
 }
-async function applyIncremental(newPeople, prog){
+async function applyIncremental(newPeople, prog, isRetry){
   /* 서버 최신 상태 (엣지 캐시 우회) */
-  var oldPeople = [];
+  var oldPeople = [], baseBuilt = null;
   try {
     var rj = await apiAdmin({ action: 'roster' });
     oldPeople = (rj.roster && rj.roster.people) || [];
+    baseBuilt = (rj.roster && rj.roster.built) || null;
   } catch(e){ oldPeople = []; }
   var oldDb = null;
   try {
@@ -1382,13 +1452,31 @@ async function applyIncremental(newPeople, prog){
     added = newPeople.length; changed = 0; kept = 0;
   }
 
-  await publishDB(db, newPeople);
+  try {
+    await publishDBBase(db, newPeople, baseBuilt);
+  } catch(e){
+    if (e.status === 409 && !isRetry) {
+      /* 다른 기기가 방금 발행함 → 최신 명단 기준으로 한 번 더 비교·적용 */
+      return applyIncremental(newPeople, prog, true);
+    }
+    throw e;
+  }
   return { db: db, added: added, changed: changed, removed: removedPeople.length,
            kept: kept, rosterOnly: rosterOnly, built: toBuild.length };
 }
+function publishDBBase(db, people, baseBuilt){
+  return apiAdmin({ action: 'publish', db: db, baseBuilt: baseBuilt,
+    roster: { v: 1, built: db.built, people: people } });
+}
 
 /* ---------- 엑셀 변환 → 즉시 서버 적용 ---------- */
+var fileBusy = false;
 async function handleFile(f){
+  if (fileBusy) return;
+  fileBusy = true;
+  try { await handleFileInner(f); } finally { fileBusy = false; }
+}
+async function handleFileInner(f){
   resetAdmin();
   try { await loadXLSX(); }
   catch(e){ return fail('엑셀 처리 라이브러리를 불러오지 못했습니다. 네트워크 연결을 확인하고 다시 시도해 주세요.'); }
