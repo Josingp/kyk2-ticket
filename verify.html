@@ -118,23 +118,23 @@ setInterval(flushQ, 20000);
 setTimeout(updateNetBar, 0);
 var $ = function(s){ return document.querySelector(s); };
 var DB = null, dbErr = null;
-var freshTried = false;
-function refreshDBFresh(){
-  if (freshTried) return Promise.resolve(false);
-  freshTried = true;
-  return fetch('/api/db?event=' + encodeURIComponent(CFG.salt) + '&fresh=' + Date.now())
-    .then(function(r){ if(!r.ok) throw 0; return r.json(); })
-    .then(function(j){ DB = j; return true; })
-    .catch(function(){ return false; });
+/* ── 검증 조회: 전체 명단을 받지 않고 확인코드로 유도한 레코드 1건만 요청.
+   스태프 세션(staffTk)을 실어 레이트리밋 면제(현장 대량 스캔 대비). 오프라인 대비 로컬 캐시. ── */
+function recCacheKey(id){ return 'kyk2box:' + CFG.salt + ':' + id; }
+function fetchBox(id){
+  return fetch('/api/db', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ event: CFG.salt, id: id, tk: staffTk || undefined })
+  }).then(function(r){ if (!r.ok) throw 0; return r.json(); })
+    .then(function(j){
+      var box = j && j.box;
+      if (box) { try { localStorage.setItem(recCacheKey(id), JSON.stringify(box)); } catch(e){} }
+      return box || null;
+    }).catch(function(){
+      try { var s = localStorage.getItem(recCacheKey(id)); if (s) return JSON.parse(s); } catch(e){}
+      return null;
+    });
 }
-var ready = fetch('/api/db?event=' + encodeURIComponent(CFG.salt))
-  .then(function(r){ if(!r.ok) throw 0; return r.json(); })
-  .catch(function(){
-    return fetch('data/db.json?v=' + Date.now())
-      .then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); });
-  })
-  .then(function(j){ DB = j; })
-  .catch(function(e){ dbErr = e; });
 
 function esc(s){ var d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
 function escA(s){ return esc(s).replace(/"/g,'&quot;'); }
@@ -215,17 +215,10 @@ function check(codeRaw){
   var code = T.normCode(codeRaw);
   if (code.length < 8){ show(false, '<div class="big">✕ 코드 8자리를 입력하세요</div>'); return; }
   var btn = $('#btn'); btn.disabled = true;
-  ready.then(function(){
-    if (dbErr || !DB) throw 'db';
-    return T.deriveVerify(code, CFG);
-  }).then(function(d){
-    var box = DB.verify && DB.verify[d.id];
-    if (box) return T.decryptJSON(d.key, box);
-    /* 최신 DB로 1회 재시도 (방금 발행된 코드 대응) */
-    return refreshDBFresh().then(function(got){
-      var b2 = got && DB.verify && DB.verify[d.id];
-      if (!b2) throw 0;
-      return T.decryptJSON(d.key, b2);
+  T.deriveVerify(code, CFG).then(function(d){
+    return fetchBox(d.id).then(function(box){
+      if (!box) throw 0;
+      return T.decryptJSON(d.key, box);
     });
   }).then(function(p){
     curCode = code; checkinOff = false;

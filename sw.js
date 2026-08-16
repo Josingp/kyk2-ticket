@@ -7,7 +7,7 @@
      즉, 한 번이라도 접속했던 기기는 완전 오프라인에서도 티켓 조회가 된다.
    - 체크인 등 나머지 API는 항상 네트워크 (상태 정합성 유지).
    ============================================================ */
-const VER = 'kyk2-v2';
+const VER = 'kyk2-v3';
 const SHELL = [
   './',
   './index.html',
@@ -69,14 +69,10 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET') return;   // 체크인·발행 등 POST는 그대로 네트워크
   const url = new URL(req.url);
 
-  /* 티켓 DB: 네트워크 우선, 오프라인이면 마지막 캐시본.
-     fresh 파라미터가 붙어도 같은 캐시 슬롯을 쓰도록 키를 정규화 */
-  if (url.pathname === '/api/db') {
-    const key = url.origin + url.pathname + '?event=' + (url.searchParams.get('event') || '');
-    e.respondWith(networkFirst(req, 4000, key));
-    return;
-  }
-  if (url.pathname.startsWith('/api/')) return;   // 나머지 API는 개입하지 않음
+  /* /api/db 는 더 이상 전체 블롭을 공개 캐시하지 않는다.
+     관람객·스태프 조회는 본인 레코드 1건만 POST로 받고(오프라인은 각 화면이 localStorage로 처리),
+     전체 블롭 GET은 관리자/스태프 세션 전용(no-store)이므로 캐시 대상이 아니다. */
+  if (url.pathname.startsWith('/api/')) return;   // 모든 API는 네트워크(개입하지 않음)
 
   /* 페이지 이동: 새 배포가 우선 반영되도록 네트워크 우선 → 오프라인이면 캐시 */
   if (req.mode === 'navigate') {
