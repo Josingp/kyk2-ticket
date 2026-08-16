@@ -998,33 +998,43 @@ function sgOverviewSVG(V, found){
 }
 function sgDetailHTML(V, e){
   var z = e.z;
+  /* 도구(사석관리)와 동일한 '도면에서 보이는 방향' 배치:
+     아래쪽 구역(a>180) → 코트가 위 · 1열 윗줄 · 1번 좌석 오른쪽(좌우 반전)
+     위쪽 구역          → 코트가 아래 · 1열 아랫줄 · 1번 좌석 왼쪽 */
+  var FU = z.a > 180;
+  function dispCol(s){ var c = sgCIdx(z, s); return FU ? (z.nC - 1 - c) : c; }
+
   var rowsWithMine = {};
   e.marks.forEach(function(m){ (rowsWithMine[m.row - 1] = rowsWithMine[m.row - 1] || []).push(m.n); });
-  var byPos = {};   /* r|dc → seat */
-  sgSeats(z).forEach(function(st){ byPos[st.r + '|' + sgCIdx(z, st)] = st; });
+  var byPos = {};   /* r|dispCol → seat */
+  sgSeats(z).forEach(function(st){ byPos[st.r + '|' + dispCol(st)] = st; });
 
   var h = '<div class="sg-detail">'
-    + '<div class="sg-dh"><b>' + esc(z.id) + '구역</b><span>' + esc(z.fl) + '</span></div>'
+    + '<div class="sg-dh"><b>' + esc(z.id) + '구역</b><span>' + esc(z.fl) + ' · 도면 방향 기준</span></div>'
     + '<p class="sg-route">🚪 ' + sgRoute(V, z) + '</p>';
   if (V.notes && V.notes[z.id]) h += '<p class="sg-note">ℹ️ ' + esc(V.notes[z.id]) + '</p>';
-  h += '<div class="sg-cap">▲ 무대 · 코트 방향 ▲</div>'
-    + '<div class="sg-gridwrap"><div class="sg-grid" style="grid-template-columns:auto repeat(' + z.nC + ',11px)">';
-  for (var r = 0; r < z.nR; r++){
+
+  var cap = '<div class="sg-cap">' + (FU ? '▲ 무대 · 코트 방향 ▲' : '▼ 무대 · 코트 방향 ▼') + '</div>';
+  var grid = '<div class="sg-gridwrap"><div class="sg-grid" style="grid-template-columns:auto repeat(' + z.nC + ',11px)">';
+  for (var i = 0; i < z.nR; i++){
+    var r = FU ? i : (z.nR - 1 - i);          /* 표시 열 순서 */
     var mineRow = rowsWithMine[r];
-    h += '<div class="sg-rl' + (mineRow ? ' on' : '') + '">' + esc(z.rl ? z.rl[r] : (r+1) + '열') + '</div>';
+    grid += '<div class="sg-rl' + (mineRow ? ' on' : '') + '">' + esc(z.rl ? z.rl[r] : (r+1) + '열') + '</div>';
     for (var dc = 0; dc < z.nC; dc++){
       var st = byPos[r + '|' + dc];
-      if (!st){ h += '<div class="sg-seat none"></div>'; continue; }
+      if (!st){ grid += '<div class="sg-seat none"></div>'; continue; }
       var mine = mineRow && mineRow.indexOf(st.n) !== -1;
-      h += '<div class="sg-seat' + (mine ? ' mine' : '') + '">' + (mine ? st.n : '') + '</div>';
+      grid += '<div class="sg-seat' + (mine ? ' mine' : '') + '">' + (mine ? st.n : '') + '</div>';
     }
   }
-  h += '</div></div>';
-  /* 좌석 번호 진행 방향 (내 열 기준) */
+  grid += '</div></div>';
+  h += FU ? (cap + grid) : (grid + cap);
+
+  /* 좌석 번호 진행 방향 (내 열 기준, 표시 순서대로) */
   var firstMineRow = Object.keys(rowsWithMine)[0];
   if (firstMineRow !== undefined){
     var rowSeats = sgSeats(z).filter(function(st){ return st.r === +firstMineRow; })
-      .sort(function(a, b){ return sgCIdx(z, a) - sgCIdx(z, b); });
+      .sort(function(a, b){ return dispCol(a) - dispCol(b); });
     if (rowSeats.length > 1)
       h += '<p class="sg-dir">좌석 번호는 그림 기준 왼쪽 <b>' + rowSeats[0].n + '번</b> → 오른쪽 <b>' + rowSeats[rowSeats.length-1].n + '번</b> 방향입니다</p>';
   }
