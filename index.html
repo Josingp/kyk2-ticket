@@ -402,7 +402,7 @@ footer{margin-top:34px;text-align:center;color:#7672ab;font-size:11.5px;line-hei
       <button id="dlStaff" type="button">스태프 확인용 명단(.xlsx) 내려받기</button>
     </div>
     <ol class="admin-steps">
-      <li>업로드 즉시 서버에 적용됩니다. 자동 적용이 실패하면 <code>db.json</code>을 내려받아 저장소의 <code>data/db.json</code>을 교체하세요. (백업 경로)</li>
+      <li>업로드 즉시 서버(Upstash)에 적용됩니다 — 서버가 유일한 원본입니다. <code>db.json 내려받기</code>는 개인 보관용 백업이며, <b>GitHub 등 공개 저장소에는 절대 올리지 마세요</b>(암호문이라도 오프라인 대입 위험).</li>
       <li><code>스태프 확인용 명단</code>은 확인코드가 들어 있으니 입장 스태프에게만 전달하고, GitHub에는 올리지 마세요.</li>
     </ol>
 
@@ -458,7 +458,7 @@ footer{margin-top:34px;text-align:center;color:#7672ab;font-size:11.5px;line-hei
 
     <div class="subhead"><h3>데이터 파기</h3></div>
     <p class="desc" style="margin-top:8px">행사 종료 후 서버(Upstash)의 명단·티켓 DB·입장 기록·공유 링크를 전부 삭제합니다.
-    개인정보 파기 의무 이행용이며 <b>되돌릴 수 없습니다.</b> 저장소의 <code>data/db.json</code> 백업과 출력한 스태프 명단, 원본 엑셀은 별도로 삭제하세요.</p>
+    개인정보 파기 의무 이행용이며 <b>되돌릴 수 없습니다.</b> 개인 보관한 <code>db.json</code> 백업과 출력한 스태프 명단, 원본 엑셀은 별도로 삭제하세요.</p>
     <button class="dangerbtn" id="btnDestroy" type="button">행사 데이터 전체 파기</button>
     <div class="err" id="destroyErr"></div>
     <div class="done" id="destroyDone"></div>
@@ -515,25 +515,25 @@ $('#evSub').textContent  = CFG.eventSub;
 $('#evInfo').textContent = CFG.eventInfo;
 document.title = CFG.eventName + ' · 모바일 초대 티켓';
 
-/* DB 로드 — 서버(API) 우선, 실패 시 저장소 파일 */
-var DB = null, dbErr = null;
-var dbReady = fetch('/api/db?event=' + encodeURIComponent(CFG.salt))
-  .then(function(r){ if(!r.ok) throw 0; return r.json(); })
-  .catch(function(){
-    return fetch('data/db.json?v=' + Date.now())
-      .then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); });
-  })
-  .then(function(j){ DB = j; })
-  .catch(function(e){ dbErr = e; });
-var freshTried = false;
-/* 방금 명단에 추가된 사람: 엣지 캐시(최대 75초)를 우회해 최신 DB로 1회 재시도 */
-function refreshDBFresh(){
-  if (freshTried) return Promise.resolve(false);
-  freshTried = true;
-  return fetch('/api/db?event=' + encodeURIComponent(CFG.salt) + '&fresh=' + Date.now())
-    .then(function(r){ if(!r.ok) throw 0; return r.json(); })
-    .then(function(j){ DB = j; return true; })
-    .catch(function(){ return false; });
+/* ── 티켓 조회: 전체 명단을 내려받지 않고 '본인 레코드 1건'만 서버에서 받는다.
+   → 공개 블롭 오프라인 무차별 복호화 차단. 조회한 본인 레코드는 오프라인 대비 로컬 캐시. ── */
+var DB = null, dbErr = null;              // DB: 관리자 도구 전용(생성/발행). 관람객 조회는 fetchBox 사용.
+var dbReady = Promise.resolve();          // 사전 전체로드 없음(하위호환용 더미)
+function recCacheKey(id){ return 'kyk2box:' + CFG.salt + ':' + id; }
+function fetchBox(id){
+  return fetch('/api/db', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ event: CFG.salt, id: id })
+  }).then(function(r){ if (!r.ok) throw 0; return r.json(); })
+    .then(function(j){
+      var box = j && j.box;
+      if (box) { try { localStorage.setItem(recCacheKey(id), JSON.stringify(box)); } catch(e){} }
+      return box || null;
+    }).catch(function(){
+      /* 오프라인/오류 → 이전에 조회해둔 본인 레코드가 있으면 사용 */
+      try { var s = localStorage.getItem(recCacheKey(id)); if (s) return JSON.parse(s); } catch(e){}
+      return null;
+    });
 }
 
 /* 표기 보정 */
@@ -651,22 +651,17 @@ $('#form').addEventListener('submit', function(ev){
 
   function attempt(){
     return T.deriveRecord(name, phone, CFG).then(function(d){
-      var box = DB && DB.records && DB.records[d.id];
-      if (!box) return null;
-      return T.decryptJSON(d.key, box).catch(function(){ return null; });
+      return fetchBox(d.id).then(function(box){
+        if (!box) return null;
+        return T.decryptJSON(d.key, box).catch(function(){ return null; });
+      });
     });
   }
-  /* DB 로드를 최대 8초 기다렸다가 조회 (로드 전 제출해도 자동 진행) */
-  Promise.race([dbReady, new Promise(function(r){ setTimeout(r, 8000); })])
-    .then(function(){
-      if (dbErr) { showMsg('티켓 데이터를 불러오지 못했습니다. 안내받은 주소로 다시 접속해 주세요.'); throw 'handled'; }
-      if (!DB) { showMsg('데이터를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.'); throw 'handled'; }
-      return attempt();
-    })
+  /* 본인 레코드 단건 조회 (네트워크 우선, 오프라인이면 로컬 캐시 사용) */
+  attempt()
     .then(function(person){
       if (person) return person;
-      /* 미발견 → 방금 추가된 인원일 수 있으니 최신 DB로 1회 재시도 */
-      return refreshDBFresh().then(function(got){ return got ? attempt() : null; });
+      return attempt();   /* 방금 추가된 인원 대비 1회 더 시도 */
     })
     .then(function(person){
       if (!person) { showMsg('입력하신 정보와 일치하는 티켓이 없습니다. 초대 안내를 받은 이름과 연락처인지 확인해 주세요.'); return; }
@@ -1339,7 +1334,7 @@ $('#btnDestroy').addEventListener('click', function(){
     serverPeople = null; rosterBuilt = ''; dashChecks = null; dashLoaded = false;
     $('#rosterBox').style.display = 'none';
     $('#dashBox').style.display = 'none';
-    done.textContent = '✔ 서버 데이터 파기 완료. 저장소의 data/db.json 백업, 출력한 스태프 명단, 원본 엑셀 파일도 잊지 말고 삭제하세요.';
+    done.textContent = '✔ 서버 데이터 파기 완료. 개인 보관한 db.json 백업, 출력한 스태프 명단, 원본 엑셀 파일도 잊지 말고 삭제하세요.';
     done.style.display = 'block';
   }).catch(function(e){
     err.textContent = '파기 실패: ' + apiErrMsg(e);
@@ -1374,7 +1369,7 @@ $('#btnAudit').addEventListener('click', function(){
 $('#btnPrivacy').addEventListener('click', function(){ $('#pModal').style.display = 'flex'; });
 $('#btnPrivacyClose').addEventListener('click', function(){ $('#pModal').style.display = 'none'; });
 $('#pModal').addEventListener('click', function(ev){ if (ev.target === this) this.style.display = 'none'; });
-var ADMIN_HASH = '1f5e0b0c7f0baac5bf80d43beb3d259f1f22295960d0bc158e24bee738c72831';
+/* 관리자 비밀번호 해시는 클라이언트에 싣지 않는다 — 인증은 서버(/api/admin)에서만 검증. */
 var authed = false;
 try { authed = sessionStorage.getItem('kyk2AdminOK') === '1'; } catch(e){}
 
@@ -1481,8 +1476,8 @@ $('#adminForm').addEventListener('submit', function(ev){
     if (r.status === 429) return { v: 'limit' };
     throw 0;
   }).catch(function(){
-    /* API 사용 불가(로컬 열기 · Upstash 미설정 등) → 로컬 해시로 확인 */
-    return sha256Hex(pw).then(function(h){ return { v: h === ADMIN_HASH ? 'ok' : 'no' }; });
+    /* 관리자 인증은 서버에서만 검증(클라이언트에 해시 미탑재). API 불가 시 로그인 불가. */
+    return { v: 'neterr' };
   }).then(function(rv){
     var v = rv.v;
     if (v === 'ok'){
@@ -1502,6 +1497,7 @@ $('#adminForm').addEventListener('submit', function(ev){
     } else {
       m.textContent = v === 'limit' ? '시도가 너무 많습니다. 10분 뒤 다시 시도해 주세요.'
         : v === 'otp' ? '인증앱(Microsoft Authenticator)의 6자리 OTP를 함께 입력해 주세요.'
+        : v === 'neterr' ? '서버에 연결할 수 없어 로그인할 수 없습니다. 네트워크를 확인해 주세요.'
         : '비밀번호가 올바르지 않습니다.';
       m.classList.add('show');
       $('#adminPw').value = '';
@@ -1636,8 +1632,9 @@ async function applyIncremental(newPeople, prog, isRetry){
   } catch(e){ oldPeople = []; }
   var oldDb = null;
   try {
-    var r = await fetch('/api/db?event=' + encodeURIComponent(CFG.salt) + '&fresh=' + Date.now());
-    if (r.ok) oldDb = await r.json();
+    var r = await fetch('/api/db?event=' + encodeURIComponent(CFG.salt) + '&fresh=' + Date.now(),
+      { headers: adminTk ? { 'x-ticket-session': adminTk } : {} });
+    if (r.ok) oldDb = await r.json();   /* 세션 없으면 401 → oldDb=null → 전체 재생성 경로로 안전 폴백 */
   } catch(e){}
 
   var keyOf = function(p){ return T.normName(p.n) + '|' + T.last4(p.p); };
