@@ -3,7 +3,7 @@
    사용법:  npm i jsdom  →  node e2e.js [리포 경로 · 생략 시 현재 폴더]
    검증 범위: 조회 폼 → 암호화 레코드 복호화 → 티켓 렌더 → 좌석 안내
    (미니맵·상세 방향·출입구 경로·다중 좌석 표기·명단 오기 경고·
-    조회 실패 메시지·0매 인원·중복 좌석 차단 팝업 — 총 8개 시나리오 43개 체크)
+    조회 실패 메시지·0매 인원·중복 좌석 차단 팝업 — 파싱 순서 프리플라이트 + 총 8개 시나리오 46개 체크)
    ※ 회차 변경(장충 8/27 등) 후 배포 전에 한 번 돌려보세요.
    ============================================================ */
 const fs = require('fs');
@@ -20,6 +20,42 @@ async function makeBox(person, name, phone) {
   const d = await TC.deriveRecord(name, phone, CFG);
   const box = await TC.encryptJSON(d.key, person);
   return { id: d.id, box };
+}
+
+/* 파싱 순서 프리플라이트 — 각 인라인 스크립트를 '그 시점까지 파싱된 DOM'에서 실행.
+   실제 브라우저는 스크립트를 만나는 즉시 실행하므로, 스크립트가 자기보다 아래에 있는
+   요소를 최상위에서 참조하면 크래시한다(jsdom 전체 파싱 후 실행이라 기본 케이스가 못 잡음). */
+async function parseOrderPreflight(){
+  const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  const re = /<script(?:\s+src="([^"]+)")?[^>]*>([\s\S]*?)<\/script>/g;
+  const scripts = []; let m;
+  while ((m = re.exec(html))) scripts.push({ src: m[1] || null, code: m[2], pos: m.index });
+  const inln = scripts.filter(s => !s.src).length;
+  let bad = 0;
+  for (let k = 0; k < scripts.length; k++){
+    if (scripts[k].src) continue;
+    const partial = html.slice(0, scripts[k].pos) + '</body></html>';
+    const dom = new JSDOM(partial, { url: 'file://' + ROOT + '/index.html',
+      runScripts: 'outside-only', virtualConsole: vc, pretendToBeVisual: true });
+    const w = dom.window;
+    if (!w.crypto || !w.crypto.subtle) Object.defineProperty(w, 'crypto', { value: require('node:crypto').webcrypto });
+    w.scrollTo = () => {}; w.alert = () => {}; w.confirm = () => true;
+    w.matchMedia = w.matchMedia || (() => ({ matches: false, addListener(){}, removeListener(){} }));
+    w.fetch = async () => ({ ok: true, status: 200, json: async () => ({}), text: async () => '' });
+    let threw = null;
+    try {
+      for (let j = 0; j <= k; j++){
+        const code = scripts[j].src
+          ? fs.readFileSync(path.join(ROOT, scripts[j].src), 'utf8')
+          : scripts[j].code;
+        w.eval(code);
+      }
+    } catch (e) { threw = e; }
+    dom.window.close();
+    if (threw){ console.log('❌ 스크립트 #' + (k + 1) + ' — 파싱 시점 실행 오류: ' + threw.message); bad++; }
+  }
+  console.log((bad ? '❌' : '✅') + ' 파싱 순서 프리플라이트 (인라인 ' + inln + '개, 브라우저 실행 시점 재현)');
+  return bad;
 }
 
 async function runCase(label, name, phone, person, checks, opts) {
@@ -118,6 +154,8 @@ async function runCase(label, name, phone, person, checks, opts) {
 
 (async () => {
   let fails = 0;
+
+  fails += await parseOrderPreflight();
 
   // 케이스 1: 정상 단일 티켓 (203구역 2열 3번 — 양식 예시 좌석)
   fails += await runCase('정상 단일 · 203구역 2열 3번', '테스트일', '010-0000-1111',
