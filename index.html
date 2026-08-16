@@ -871,12 +871,15 @@ function showDupModal(z, s, ts){
   $('#dupTs').textContent = '최초 입장 처리 ' + fmtTs(ts);
   $('#dupOverlay').classList.add('show');
 }
-$('#dupBtn').addEventListener('click', function(){
-  /* 확인을 눌러도 닫히지 않음 — 이미 선점된 좌석은 게이트에서 이 화면으로 확인받아야 함 */
-  var btn = $('#dupBtn'), box = $('#dupBox');
+/* 확인을 눌러도 닫히지 않음 — 이미 선점된 좌석은 게이트에서 이 화면으로 확인받아야 함.
+   ※ 문서 위임 방식: 팝업 HTML이 스크립트보다 뒤(body 끝)에 있어도 안전하게 동작 */
+document.addEventListener('click', function(e){
+  var btn = e.target;
+  if (!btn || btn.id !== 'dupBtn') return;
+  var box = document.getElementById('dupBox');
   btn.classList.add('deny');
   btn.textContent = '이미 선점된 좌석 — 닫을 수 없습니다';
-  box.classList.remove('shake'); void box.offsetWidth; box.classList.add('shake');
+  if (box){ box.classList.remove('shake'); void box.offsetWidth; box.classList.add('shake'); }
 });
 
 function doStaffCheckin(art, btn){
