@@ -26,9 +26,11 @@ module.exports = async (req, res) => {
   try {
     /* ---- 관람객: 본인 좌석 상태 ---- */
     if (body.action === 'status') {
-      if (!memLimit(req, 900)) { res.status(429).json({ error: 'too_many' }); return; }
+      /* 행사장 LTE 는 통신사 NAT 로 수백 명이 같은 IP — IP 는 광역 상한만, 실제 한도는 확인코드(사람) 단위 */
+      if (!memLimit(req, 6000)) { res.status(429).json({ error: 'too_many' }); return; }
       const code = normCode(body.code);
       if (code.length < 8) { res.status(400).json({ error: 'bad_code' }); return; }
+      if (!memLimit(req, 240, 'st:' + code)) { res.status(429).json({ error: 'too_many' }); return; }
       const roster = await getRosterCached(ev, 10000);
       if (!roster || !roster.people) { res.status(404).json({ error: 'no_roster' }); return; }
       const person = roster.people.find(p => normCode(p.c) === code);
@@ -46,9 +48,10 @@ module.exports = async (req, res) => {
        유효한 확인코드 소지 = 본인 티켓 증명이며, 처리는 본인에게 불리한
        방향(사용 처리)이라 위조 유인이 없음. 취소는 아래에서 비밀번호 필요. ---- */
     if (body.action === 'set' && body.on) {
-      if (!memLimit(req, 900)) { res.status(429).json({ error: 'too_many' }); return; }
+      if (!memLimit(req, 6000)) { res.status(429).json({ error: 'too_many' }); return; }
       const code = normCode(body.code), z = norm(body.z), s = norm(body.s);
       if (code.length < 8 || !z || !s) { res.status(400).json({ error: 'bad_seat' }); return; }
+      if (!memLimit(req, 120, 'ck:' + code)) { res.status(429).json({ error: 'too_many' }); return; }
       const roster = await getRosterCached(ev, 10000);
       if (!roster || !roster.people) { res.status(404).json({ error: 'no_roster' }); return; }
       const person = roster.people.find(p => normCode(p.c) === code);

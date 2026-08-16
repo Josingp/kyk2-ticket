@@ -16,10 +16,11 @@ const { sanitizeEvent, getDbCached, redis, clientIp, readBody, checkSession, aud
 const REC_LIMIT = 30;      // 미인증 IP당 단건조회 허용 횟수(10분). 정상 조회 1~수회엔 충분, 대입은 차단.
 const REC_WINDOW = 600;
 
-/* Redis 기반 per-IP 카운터 — 서버리스 인스턴스와 무관하게 일관 적용 */
-async function rateOk(req, tag, max, win) {
+/* Redis 기반 카운터 — 서버리스 인스턴스와 무관하게 일관 적용.
+   keyOverride 를 주면 IP 대신 그 키 기준(행사장 통신사 NAT 대응). */
+async function rateOk(req, tag, max, win, keyOverride) {
   try {
-    const k = 'tickets:rl:' + tag + ':' + clientIp(req);
+    const k = 'tickets:rl:' + tag + ':' + (keyOverride || clientIp(req));
     const n = await redis(['INCR', k]);
     if (n === 1) await redis(['EXPIRE', k, String(win)]);
     return n <= max;
@@ -36,7 +37,13 @@ module.exports = async (req, res) => {
     if (!/^[0-9a-f]{32}$/.test(id)) { res.status(400).json({ error: 'bad_id' }); return; }
 
     const authed = !!checkSession(body.tk);   // 스태프/관리자면 레이트리밋 면제
-    if (!authed && !(await rateOk(req, 'rec', REC_LIMIT, REC_WINDOW))) {
+    /* 레코드ID 단위 한도(정상 조회는 본인 ID 수회) + IP 광역 상한(NAT 뒤 수백 명 허용, 대량 대입은 차단) */
+    if (!authed && !(await rateOk(req, 'rec', REC_LIMIT, REC_WINDOW, id))) {
+      audit(ev, 'rec_ratelimit', req, {});
+      res.status(429).json({ error: 'too_many' });
+      return;
+    }
+    if (!authed && !(await rateOk(req, 'recip', 1200, REC_WINDOW))) {
       audit(ev, 'rec_ratelimit', req, {});     // 대량 조회 시도는 흔적을 남긴다
       res.status(429).json({ error: 'too_many' }); return;
     }

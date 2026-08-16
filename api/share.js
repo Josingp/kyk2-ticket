@@ -17,7 +17,26 @@ const crypto = require('node:crypto');
 const norm = v => String(v == null ? '' : v).trim();
 const normCode = v => norm(v).replace(/[^0-9a-zA-Z]/g, '').toUpperCase();
 const AB = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-const TTL_MS = 6 * 3600000;   // 공유 링크 유효시간: 생성 후 6시간
+const TTL_MS = 6 * 3600000;   // 최소 유효시간: 생성 후 6시간
+/* 만료 시각 = max(생성+6시간, 행사일 밤 12시 KST).
+   행사일은 이벤트 키 끝의 MMDD 에서 추정(예: KYK2-JAMSIL-0820 → 8/20).
+   전날 밤에 뿌린 초대 링크가 게이트 앞에서 만료되는 사고를 막는다. */
+function shareExpiry(ev, t) {
+  const m = /(\d{2})(\d{2})$/.exec(String(ev || ''));
+  let end = 0;
+  if (m) {
+    const mo = +m[1], da = +m[2];
+    if (mo >= 1 && mo <= 12 && da >= 1 && da <= 31) {
+      const y0 = new Date(t).getUTCFullYear();
+      for (const y of [y0 - 1, y0, y0 + 1]) {
+        /* 행사일 다음날 00:00 KST = 행사일 24:00 까지 유효 */
+        const cand = Date.UTC(y, mo - 1, da) - 9 * 3600000 + 24 * 3600000;
+        if (cand > t && cand - t < 200 * 24 * 3600000) { end = cand; break; }
+      }
+    }
+  }
+  return Math.max(t + TTL_MS, end);
+}
 function makeToken(n){
   const b = crypto.randomBytes(n); let s = '';
   for (let i = 0; i < n; i++) s += AB[b[i] % AB.length];
@@ -32,7 +51,7 @@ module.exports = async (req, res) => {
   const K = 'tickets:' + ev + ':share';
 
   try {
-    if (!memLimit(req, 900)) { res.status(429).json({ error: 'too_many' }); return; }
+    if (!memLimit(req, 6000)) { res.status(429).json({ error: 'too_many' }); return; }   /* IP 광역 상한 — 행사장 NAT 대응 */
 
     /* ---- 수신자: 토큰으로 좌석 조회 (1매 또는 묶음) ----
        폭파 방지: 명단 수정으로 일부 좌석이 바뀌어도 남은 좌석만으로 링크가 살아있고,
@@ -40,14 +59,15 @@ module.exports = async (req, res) => {
     if (body.action === 'resolve') {
       const tok = normCode(body.token);
       if (tok.length < 8) { res.status(400).json({ error: 'bad_token' }); return; }
+      if (!memLimit(req, 120, 'tk:' + tok)) { res.status(429).json({ error: 'too_many' }); return; }
       const shareMap = await getHashCached('share', ev, 10000);
       const raw = shareMap[tok];
       if (!raw) { res.status(404).json({ error: 'unknown_token' }); return; }
       let d = null;
       try { d = JSON.parse(raw); } catch (e) {}
       if (!d) { res.status(404).json({ error: 'unknown_token' }); return; }
-      /* 생성 후 6시간 경과 → 만료 (지연 정리 포함) */
-      if (!d.t || Date.now() - d.t > TTL_MS) {
+      /* 행사일 자정(KST) 경과 → 만료 (지연 정리 포함) */
+      if (!d.t || Date.now() > shareExpiry(ev, d.t)) {
         try {
           await redis(['HDEL', K, tok]);
           if (d.k) await redis(['HDEL', K, d.k]);
@@ -98,13 +118,13 @@ module.exports = async (req, res) => {
         const raw0 = await redis(['HGET', K, tok]);
         let d0 = null;
         try { d0 = raw0 ? JSON.parse(raw0) : null; } catch (e) {}
-        if (!d0 || !d0.t || Date.now() - d0.t > TTL_MS) {
+        if (!d0 || !d0.t || Date.now() > shareExpiry(ev, d0.t)) {
           await redis(['HDEL', K, tok]);
           await redis(['HDEL', K, seatKey]);
           bustKey('share', ev);
           tok = null;
         } else {
-          exp = d0.t + TTL_MS;
+          exp = shareExpiry(ev, d0.t);
         }
       }
       if (!tok) {
@@ -118,7 +138,7 @@ module.exports = async (req, res) => {
         } else {
           tok = await redis(['HGET', K, seatKey]);
         }
-        exp = t0 + TTL_MS;
+        exp = shareExpiry(ev, t0);
         bustKey('share', ev);
       }
       res.status(200).json({ ok: true, token: tok, exp: exp });

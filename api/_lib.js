@@ -219,14 +219,16 @@ async function getHashCached(name, ev, ttl) {
   return memSet(k, m, ttl || 3000);
 }
 
-/* 인증 없는 엔드포인트용 인메모리 요청 한도(10분 창) — Redis 소모 없음 */
-function memLimit(req, max) {
-  const ip = clientIp(req), now = Date.now();
-  let e = MEM.rl.get(ip);
+/* 인증 없는 엔드포인트용 인메모리 요청 한도(10분 창) — Redis 소모 없음.
+   key 를 주면 IP 대신 그 키(예: 확인코드) 기준 — 통신사 NAT 로 수백 명이
+   같은 공인 IP 를 쓰는 행사장에서도 정상 사용자가 차단되지 않는다. */
+function memLimit(req, max, key) {
+  const id = key || clientIp(req), now = Date.now();
+  let e = MEM.rl.get(id);
   if (!e || now > e.exp) {
-    if (MEM.rl.size > 5000) MEM.rl.clear();
+    if (MEM.rl.size > 20000) MEM.rl.clear();
     e = { n: 0, exp: now + 600000 };
-    MEM.rl.set(ip, e);
+    MEM.rl.set(id, e);
   }
   return ++e.n <= (max || 900);
 }
