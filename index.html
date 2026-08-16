@@ -129,6 +129,24 @@ button.primary:focus-visible{outline:3px solid var(--navy);outline-offset:2px}
   padding:8px 10px;margin-top:8px;line-height:1.55}
 .sg-warn{font-size:12px;color:#9c3b3b;background:#fdf0ef;border:1px solid #efc7c2;border-radius:8px;
   padding:8px 10px;margin-top:10px;line-height:1.55;font-weight:600}
+
+/* ==== 중복 좌석 차단 팝업 — 이미 선점된 좌석은 이 화면에서 절대 넘어가지 못함 ==== */
+.dupOverlay{position:fixed;inset:0;background:rgba(126,15,15,.97);z-index:99999;display:none;
+  align-items:center;justify-content:center;padding:24px;backdrop-filter:blur(3px)}
+.dupOverlay.show{display:flex}
+.dupBox{max-width:340px;width:100%;text-align:center;color:#fff}
+.dupBox .dupBig{font-size:64px;line-height:1;margin-bottom:12px}
+.dupBox h2{font:800 22px/1.3 var(--body);margin:0 0 12px;color:#fff;letter-spacing:-.01em}
+.dupBox .dupSeat{font:700 17px var(--body);background:rgba(255,255,255,.16);border-radius:10px;
+  padding:12px;margin:0 0 8px;word-break:keep-all}
+.dupBox .dupTs{font:600 14px var(--body);opacity:.95;margin:0 0 16px}
+.dupBox p{font:400 13.5px/1.7 var(--body);opacity:.95;margin:0 0 20px;word-break:keep-all}
+.dupBox button{width:100%;padding:15px;border:0;border-radius:12px;font:700 15px var(--body);
+  background:#fff;color:#8f1d1d;cursor:pointer;transition:background .15s,color .15s}
+.dupBox button.deny{background:rgba(255,255,255,.22);color:#fff;cursor:not-allowed}
+@keyframes dupShake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-9px)}40%,80%{transform:translateX(9px)}}
+.dupBox.shake{animation:dupShake .4s}
+.ticket.dup .t-state b{color:#e74c3c}
 .sg-cap{margin-top:13px;text-align:center;font:700 11px var(--body);color:var(--orange-deep);letter-spacing:.08em}
 .sg-gridwrap{margin-top:7px;overflow-x:auto;padding-bottom:2px}
 .sg-grid{display:grid;gap:2px;align-items:center;width:max-content;margin:0 auto}
@@ -707,7 +725,8 @@ function apiCheckin(payload){
 
 var statusTimer = null, statusFails = 0;
 function fmtTs(ts){
-  return new Date(ts).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+  /* 입장 시각은 기기 시간대와 무관하게 행사장 기준(KST)으로 고정 — 게이트 대조 혼선 방지 */
+  return new Date(ts).toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 }
 function applyCheckins(seats){
   var arts = document.querySelectorAll('#tickets .ticket');
@@ -718,13 +737,20 @@ function applyCheckins(seats){
     for (var k = 0; k < seats.length; k++) if (seats[k].z === z && seats[k].s === s) { hit = seats[k]; break; }
     var state = row.querySelector('.t-state'), btn = row.querySelector('.t-staffbtn');
     if (hit && hit.ts) {
+      var dup = dupSeats[z + '|' + s];
       art.classList.add('used');
-      state.innerHTML = '<b>입장 완료</b> · ' + fmtTs(hit.ts);
+      art.classList.toggle('dup', !!dup);
+      state.innerHTML = dup
+        ? '<b>🚫 이미 선점된 좌석</b> · 최초 입장 ' + fmtTs(hit.ts)
+        : '<b>입장 완료</b> · ' + fmtTs(hit.ts);
       btn.style.display = 'none';
-      art.querySelector('.t-usedts').textContent = fmtTs(hit.ts) + ' 입장';
+      art.querySelector('.t-usedts').textContent = dup ? '이미 선점된 좌석' : fmtTs(hit.ts) + ' 입장';
+      var stamp = art.querySelector('.t-stamp span');
+      if (stamp && stamp.firstChild && stamp.firstChild.nodeType === 3)
+        stamp.firstChild.nodeValue = dup ? '입장 불가' : '입장 완료';
       var sh = art.querySelector('.t-share'); if (sh) sh.style.display = 'none';
     } else {
-      art.classList.remove('used');
+      art.classList.remove('used', 'dup');
       state.textContent = '미입장';
       btn.style.display = '';
     }
@@ -835,6 +861,24 @@ $('#tickets').addEventListener('click', function(ev){
   var t = ev.target;
   if (t.classList.contains('t-staffbtn')) doStaffCheckin(t.closest('.ticket'), t);
 });
+/* ==== 중복 좌석 차단 팝업 ====
+   같은 좌석이 이미 다른 화면에서 입장 처리된 경우:
+   전면 팝업으로 차단하고, 확인을 눌러도 닫히지 않는다 — 스태프 확인 없이는 넘어갈 수 없음. */
+var dupSeats = {};   /* 'z|s' → true : 이 기기에서 선점 충돌이 확인된 좌석 */
+function showDupModal(z, s, ts){
+  dupSeats[z + '|' + s] = true;
+  $('#dupSeat').textContent = z + ' · ' + s;
+  $('#dupTs').textContent = '최초 입장 처리 ' + fmtTs(ts);
+  $('#dupOverlay').classList.add('show');
+}
+$('#dupBtn').addEventListener('click', function(){
+  /* 확인을 눌러도 닫히지 않음 — 이미 선점된 좌석은 게이트에서 이 화면으로 확인받아야 함 */
+  var btn = $('#dupBtn'), box = $('#dupBox');
+  btn.classList.add('deny');
+  btn.textContent = '이미 선점된 좌석 — 닫을 수 없습니다';
+  box.classList.remove('shake'); void box.offsetWidth; box.classList.add('shake');
+});
+
 function doStaffCheckin(art, btn){
   var msg = art.querySelector('.t-checkmsg'), row = art.querySelector('.t-check');
   msg.classList.remove('show');
@@ -843,11 +887,11 @@ function doStaffCheckin(art, btn){
   btn.disabled = true;
   apiCheckin({ action: 'set', code: curPerson.c, z: row.dataset.z, s: row.dataset.s, on: true })
     .then(function(j){
-      applyCheckins([{ z: row.dataset.z, s: row.dataset.s, ts: j.ts }]);
       if (j.already){
-        msg.textContent = '⚠ 이 좌석은 이미 ' + fmtTs(j.ts) + '에 입장 처리되어 있었습니다. 같은 좌석으로 두 명이 입장을 시도했을 수 있으니 게이트에서 확인해 주세요.';
-        msg.classList.add('show');
+        /* 선점 충돌: 차단 팝업 먼저 → dup 상태로 렌더 (입장 완료처럼 보이지 않게) */
+        showDupModal(row.dataset.z, row.dataset.s, j.ts);
       }
+      applyCheckins([{ z: row.dataset.z, s: row.dataset.s, ts: j.ts }]);
       pollStatus();
     }).catch(function(e){
       if (!e.status || e.status >= 500){
@@ -1240,7 +1284,7 @@ setInterval(flushCheckinQueue, 20000);
   lg.addEventListener('keydown', function(ev){ if (ev.key === 'Enter' || ev.key === ' ') goHome(); });
 })();
 
-/* 공유 링크 유효기간 안내 — 행사 당일 밤 12시(KST)까지 유효 (최소 6시간 보장) */
+/* 공유 링크 만료 안내: 경기일이면 고지만, 다른 날이면 확인을 받는다 */
 function isEventDay(){
   try {
     var kstToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date(Date.now() + timeOffset));
@@ -1248,13 +1292,15 @@ function isEventDay(){
   } catch(e){ return false; }
 }
 function shareExpiryOK(){
-  window.alert('안내: 이 공유 링크는 행사 당일(' + (CFG.eventDateISO || '') + ') 밤 12시까지 유효합니다.\n행사 후에는 자동 만료됩니다.');
-  return true;
+  if (isEventDay()){
+    window.alert('안내: 이 공유 링크는 만든 시각부터 6시간 뒤 자동 만료됩니다.');
+    return true;
+  }
+  return window.confirm('이 공유 링크는 만든 시각부터 6시간 뒤 자동 만료됩니다.\n오늘은 경기일(' + (CFG.eventDateISO || '') + ')이 아닌데 지금 보내시겠어요?\n받는 분이 6시간 안에 열지 못하면 링크를 다시 만들어 보내야 합니다.');
 }
 function expText(exp){
   if (!exp) return '';
-  var d = new Date(exp);
-  return ' ⏱ ' + d.toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }) + '까지 유효';
+  return ' ⏱ ' + new Date(exp).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }) + '까지 유효';
 }
 
 /* ---- 여러 좌석 한 번에 보내기 ---- */
@@ -1361,7 +1407,7 @@ $('#multiShare').addEventListener('click', function(ev){
     $('#btnAgain').textContent = '처음 화면으로';
   }).catch(function(e){
     var why = e.code === 'expired'
-      ? '<b>만료된 티켓입니다.</b><br>공유 링크는 행사 당일 밤 12시까지만 유효합니다. 초대자에게 새 링크를 다시 요청하세요.'
+      ? '<b>만료된 티켓입니다.</b><br>공유 링크는 만든 시각부터 6시간 동안만 유효합니다. 초대자에게 새 링크를 다시 요청하세요.'
       : (e.status === 404
         ? '링크가 삭제되었거나 좌석 정보가 변경되었습니다. 보내주신 분께 링크를 다시 요청해 주세요.'
         : esc(apiErrMsg(e)));
@@ -2096,5 +2142,17 @@ $('#btnRosterStaff').addEventListener('click', function(){
 });
 })();
 </script>
+<div class="dupOverlay" id="dupOverlay" role="alertdialog" aria-modal="true" aria-labelledby="dupTitle">
+  <div class="dupBox" id="dupBox">
+    <div class="dupBig">🚫</div>
+    <h2 id="dupTitle">이미 선점된 좌석입니다</h2>
+    <div class="dupSeat" id="dupSeat"></div>
+    <div class="dupTs" id="dupTs"></div>
+    <p>이 좌석은 다른 티켓 화면에서 <b>먼저 입장 처리</b>되었습니다.<br>
+       본 티켓으로는 입장할 수 없습니다.<br>
+       이 화면을 그대로 게이트 스태프에게 보여주세요.</p>
+    <button type="button" id="dupBtn">확인</button>
+  </div>
+</div>
 </body>
 </html>
