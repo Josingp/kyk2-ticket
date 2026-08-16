@@ -127,6 +127,8 @@ button.primary:focus-visible{outline:3px solid var(--navy);outline-offset:2px}
 .sg-route b{color:var(--orange-deep)}
 .sg-note{font-size:12px;color:#8a6d3b;background:#fff7ed;border:1px solid #f0d9b5;border-radius:8px;
   padding:8px 10px;margin-top:8px;line-height:1.55}
+.sg-warn{font-size:12px;color:#9c3b3b;background:#fdf0ef;border:1px solid #efc7c2;border-radius:8px;
+  padding:8px 10px;margin-top:10px;line-height:1.55;font-weight:600}
 .sg-cap{margin-top:13px;text-align:center;font:700 11px var(--body);color:var(--orange-deep);letter-spacing:.08em}
 .sg-gridwrap{margin-top:7px;overflow-x:auto;padding-bottom:2px}
 .sg-grid{display:grid;gap:2px;align-items:center;width:max-content;margin:0 auto}
@@ -879,12 +881,18 @@ function distM(la1, lo1, la2, lo2){
 function sgZoneId(z){ var m = String(z || '').match(/(\d{3})/); return m ? m[1] : null; }
 function sgRow(s){ var m = String(s || '').match(/(\d+)\s*열/); return m ? +m[1] : null; }
 function sgSeatNos(s){
-  var m = String(s || '').match(/(\d+)(?:\s*[~∼〜-]\s*(\d+))?\s*번/);
-  if (!m) return [];
-  var a = +m[1], b = m[2] ? +m[2] : a;
-  if (b < a){ var t = a; a = b; b = t; }
+  /* "…번" 앞의 숫자 나열을 모두 좌석 번호로 해석 — 6번 · 6~8번 · 6,7번 · 6·7번 · "3번, 5번" 모두 지원 */
   var out = [];
-  for (var n = a; n <= b && out.length < 40; n++) out.push(n);
+  var segs = String(s || '').match(/([0-9][0-9\s,·、~∼〜-]*)\s*번/g);
+  if (!segs) return out;
+  segs.forEach(function(part){
+    var re = /(\d+)(?:\s*[~∼〜-]\s*(\d+))?/g, m;
+    while ((m = re.exec(part)) && out.length < 40){
+      var a = +m[1], b = m[2] ? +m[2] : a;
+      if (b < a){ var t = a; a = b; b = t; }
+      for (var n = a; n <= b && out.length < 40; n++) if (out.indexOf(n) === -1) out.push(n);
+    }
+  });
   return out;
 }
 function sgSeats(z){
@@ -1021,6 +1029,7 @@ function sgDetailHTML(V, e){
 
   var cap = '<div class="sg-cap">' + (FU ? '▲ 무대 · 코트 방향 ▲' : '▼ 무대 · 코트 방향 ▼') + '</div>';
   var grid = '<div class="sg-gridwrap"><div class="sg-grid" style="grid-template-columns:auto repeat(' + z.nC + ',11px)">';
+  var placed = 0;
   for (var i = 0; i < z.nR; i++){
     var r = FU ? i : (z.nR - 1 - i);          /* 표시 열 순서 */
     var mineRow = rowsWithMine[r];
@@ -1029,11 +1038,16 @@ function sgDetailHTML(V, e){
       var st = byPos[r + '|' + dc];
       if (!st){ grid += '<div class="sg-seat none"></div>'; continue; }
       var mine = mineRow && mineRow.indexOf(st.n) !== -1;
+      if (mine) placed++;
       grid += '<div class="sg-seat' + (mine ? ' mine' : '') + '">' + (mine ? st.n : '') + '</div>';
     }
   }
   grid += '</div></div>';
   h += FU ? (cap + grid) : (grid + cap);
+
+  /* 좌석 표기는 해석됐는데 배치도에서 해당 열·번호를 못 찾은 경우 (명단 오기 등) — 조용히 넘어가지 않고 알림 */
+  if ((e.tried || 0) > 0 && placed === 0)
+    h += '<p class="sg-warn">⚠️ 티켓의 좌석 번호를 배치도에서 찾지 못했습니다. 좌석은 티켓 표기가 기준이며, 입장 시 게이트 스태프에게 문의해 주세요.</p>';
 
   /* 좌석 번호 진행 방향 (내 열 기준, 표시 순서대로 · 번호 없는 휠체어석 제외) */
   var firstMineRow = Object.keys(rowsWithMine)[0];
@@ -1061,8 +1075,12 @@ function buildSeatGuide(person){
     var e = found.get(zid);
     e.labels.push(String(tk.z).trim() + ' ' + String(tk.s).trim() + (tk.b ? ' (' + tk.b + ')' : ''));
     var row = sgRow(tk.s);
-    if (row != null && row >= 1 && row <= z.nR)
-      sgSeatNos(tk.s).forEach(function(n){ e.marks.push({ row: row, n: n }); });
+    var nums = sgSeatNos(tk.s);
+    if (row != null && nums.length){
+      e.tried = (e.tried || 0) + nums.length;   /* 좌석 표기를 해석한 개수 (행 범위 밖 포함) */
+      if (row >= 1 && row <= z.nR)
+        nums.forEach(function(n){ e.marks.push({ row: row, n: n }); });
+    }
   });
   if (!found.size){ host.style.display = 'none'; return; }
   var h = '<h2>좌석 위치 안내 <small>' + esc(V.name) + '</small></h2>'
@@ -1152,6 +1170,9 @@ if ('serviceWorker' in navigator) {
     var swHadController = !!navigator.serviceWorker.controller, swReloaded = false;
     navigator.serviceWorker.addEventListener('controllerchange', function(){
       if (!swHadController || swReloaded) return;
+      /* 티켓 화면이 열려 있거나 오프라인이면 새로고침하지 않음 —
+         입장 대기 중 배포가 일어나도 관람객 화면이 날아가지 않도록. 새 버전은 다음 방문에 적용됨. */
+      if ((typeof curPerson !== 'undefined' && curPerson) || navigator.onLine === false) return;
       swReloaded = true;
       location.reload();
     });
