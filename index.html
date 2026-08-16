@@ -135,6 +135,14 @@ button.primary:focus-visible{outline:3px solid var(--navy);outline-offset:2px}
 .sg-my{font-size:12.5px;color:var(--navy);font-weight:700;margin-top:6px;text-align:center;word-break:keep-all}
 
 /* 여러 장 보내기 */
+#multiShare{padding:8px 20px;margin-bottom:16px}
+.ms-head{display:flex;align-items:center;justify-content:space-between;width:100%;border:0;background:none;
+  padding:12px 0;font:700 15px var(--disp);color:var(--navy);cursor:pointer;text-align:left}
+.ms-head small{font:700 11px var(--body);color:#8985ab;margin-left:4px}
+.ms-arrow{font-style:normal;color:#8985ab;transition:transform .18s}
+#multiShare.open .ms-arrow{transform:rotate(180deg)}
+.ms-body{display:none;padding-bottom:14px}
+#multiShare.open .ms-body{display:block}
 .ms-list{max-height:220px;overflow:auto;border:1.5px solid #e7e4f3;border-radius:12px;margin-top:8px}
 .ms-row{display:flex;align-items:center;gap:9px;padding:10px 12px;font:600 13px var(--body);color:#38345c;border-top:1px solid #efecf7;cursor:pointer}
 .ms-list .ms-row:first-child{border-top:0}
@@ -338,8 +346,8 @@ footer{margin-top:34px;text-align:center;color:#7672ab;font-size:11.5px;line-hei
     <p class="hello" id="hello"></p>
     <p class="live-note">입장 시 캡처 화면이 아닌 <b>실시간 화면</b>을 제시해 주세요.<br>(초 단위 시계가 움직여야 유효한 티켓입니다)</p>
     <p class="geo" id="geoBadge"></p>
-    <div id="tickets"></div>
     <div class="card guide" id="multiShare" style="display:none"></div>
+    <div id="tickets"></div>
     <div class="card guide" id="seatGuide" style="display:none"></div>
     <button class="again" id="btnAgain" type="button">다른 정보로 조회</button>
   </section>
@@ -1108,8 +1116,11 @@ function renderMultiShare(person){
     return '<label class="ms-row"><input type="checkbox" data-i="' + i + '"><span>' + label + '</span></label>';
   }).join('');
   host.innerHTML =
-    '<h2>여러 좌석 한 번에 보내기 <small>선물 링크</small></h2>' +
-    '<p class="desc">보낼 좌석을 골라 링크 하나로 묶어 전달합니다. 받은 사람은 선택된 좌석 티켓만 보게 됩니다.</p>' +
+    '<button class="ms-head" id="msToggle" type="button">' +
+      '<span>🎁 여러 좌석 한 번에 보내기 <small>선물 링크</small></span><i class="ms-arrow">▾</i>' +
+    '</button>' +
+    '<div class="ms-body" id="msBody">' +
+    '<p class="desc" style="margin-top:10px">보낼 좌석을 골라 링크 하나로 묶어 전달합니다. 받은 사람은 선택된 좌석 티켓만 보게 됩니다.</p>' +
     '<label class="ms-row ms-all"><input type="checkbox" id="msAll"><span><b>전체 선택</b> (' + person.t.length + '매)</span></label>' +
     '<div class="ms-list">' + rows + '</div>' +
     '<button class="primary" id="msMake" type="button" style="margin-top:12px">선택한 좌석 링크 만들기</button>' +
@@ -1121,7 +1132,8 @@ function renderMultiShare(person){
         '<button type="button" class="t-shdel" id="msDel">삭제</button>' +
       '</div>' +
     '</div>' +
-    '<p class="ms-msg" id="msMsg"></p>';
+    '<p class="ms-msg" id="msMsg"></p>' +
+    '</div>';
   host.style.display = 'block';
 }
 var lastMsSeats = null;
@@ -1143,6 +1155,11 @@ $('#multiShare').addEventListener('change', function(ev){
 });
 $('#multiShare').addEventListener('click', function(ev){
   var t = ev.target;
+  var head = t.closest && t.closest('#msToggle');
+  if (head){
+    var open = $('#multiShare').classList.toggle('open');
+    return;
+  }
   if (t.id === 'msMake'){
     var seats = msSelected();
     if (!seats.length) return msNote('보낼 좌석을 하나 이상 선택해 주세요.');
