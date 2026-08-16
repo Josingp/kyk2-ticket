@@ -3,7 +3,7 @@
    사용법:  npm i jsdom  →  node e2e.js [리포 경로 · 생략 시 현재 폴더]
    검증 범위: 조회 폼 → 암호화 레코드 복호화 → 티켓 렌더 → 좌석 안내
    (미니맵·상세 방향·출입구 경로·다중 좌석 표기·명단 오기 경고·
-    조회 실패 메시지·0매 인원 — 총 6개 시나리오 33개 체크)
+    조회 실패 메시지·0매 인원·중복 좌석 차단 팝업 — 총 8개 시나리오 43개 체크)
    ※ 회차 변경(장충 8/27 등) 후 배포 전에 한 번 돌려보세요.
    ============================================================ */
 const fs = require('fs');
@@ -25,6 +25,9 @@ async function makeBox(person, name, phone) {
 async function runCase(label, name, phone, person, checks, opts) {
   opts = opts || {};
   const rec = await makeBox(person, opts.boxName || name, opts.boxPhone || phone);
+  const ck = {};   // 체크인 목 저장소 (HSETNX 의미론)
+  if (opts.preCheckedTs && person.t && person.t[0])
+    ck[String(person.t[0].z).trim() + '|' + String(person.t[0].s).trim()] = opts.preCheckedTs;
   const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   const dom = new JSDOM(html, {
     url: 'file://' + ROOT + '/index.html',
@@ -47,7 +50,20 @@ async function runCase(label, name, phone, person, checks, opts) {
       if (reqId === rec.id) return { ok: true, status: 200, json: async () => ({ box: rec.box }) };
       return { ok: true, status: 200, json: async () => ({}) };
     }
-    if (u.includes('/api/checkin')) return { ok: true, status: 200, json: async () => ({ states: [] }) };
+    if (u.includes('/api/checkin')) {
+      let b = {}; try { b = JSON.parse(opt.body); } catch (e) {}
+      if (b.action === 'set' && b.on) {
+        const key = b.z + '|' + b.s;
+        if (ck[key]) return { ok: true, status: 200, json: async () => ({ ok: true, ts: ck[key], already: true }) };
+        ck[key] = new Date().toISOString();
+        return { ok: true, status: 200, json: async () => ({ ok: true, ts: ck[key], already: false }) };
+      }
+      if (b.action === 'status') {
+        const seats = (person.t || []).map(tk => ({ z: String(tk.z).trim(), s: String(tk.s).trim(), ts: ck[String(tk.z).trim() + '|' + String(tk.s).trim()] || null }));
+        return { ok: true, status: 200, json: async () => ({ ok: true, seats, now: Date.now() }) };
+      }
+      return { ok: true, status: 200, json: async () => ({ ok: true }) };
+    }
     return { ok: true, status: 200, json: async () => ({}), text: async () => '' };
   };
 
@@ -65,6 +81,17 @@ async function runCase(label, name, phone, person, checks, opts) {
     if (g && g.style.display === 'block') break;
     const msg = w.document.querySelector('#msg');
     if (msg && msg.classList.contains('show')) break;
+  }
+
+  /* 입장 버튼 클릭 시뮬레이션 (게이트 스태프 동작) */
+  if (opts.clickCheckin) {
+    w.confirm = () => true;
+    const cb = w.document.querySelector('#tickets .t-staffbtn');
+    if (cb) { cb.click(); await new Promise(r => setTimeout(r, 500)); }
+    if (opts.clickDupConfirm) {
+      const db = w.document.querySelector('#dupBtn');
+      if (db) { db.click(); await new Promise(r => setTimeout(r, 200)); }
+    }
   }
 
   const doc = w.document;
@@ -156,6 +183,33 @@ async function runCase(label, name, phone, person, checks, opts) {
     ['좌석 안내 숨김', c => !c.guideShown],
     ['티켓 0매', c => c.ticketCount === 0],
   ]);
+
+  // 케이스 7: 중복 좌석 — 다른 화면에서 이미 입장된 좌석에 입장 시도 → 차단 팝업(확인 눌러도 유지)
+  fails += await runCase('중복 좌석 차단 팝업', '테스트칠', '010-0000-7777',
+    { n: '테스트칠', c: 'TESTCODE7', t: [{ z: '203구역', s: '2열 3번' }] }, [
+    ['차단 팝업 표시', c => c.doc.querySelector('#dupOverlay').classList.contains('show')],
+    ['팝업에 좌석 표기', c => c.doc.querySelector('#dupSeat').textContent.includes('203구역')],
+    ['팝업에 최초 입장시각(19:42 KST)', c => c.doc.querySelector('#dupTs').textContent.includes('19:42')],
+    ['확인 눌러도 닫히지 않음', c => c.doc.querySelector('#dupOverlay').classList.contains('show')],
+    ['확인 버튼이 차단 문구로 전환', c => c.doc.querySelector('#dupBtn').textContent.includes('닫을 수 없습니다')],
+    ['티켓이 선점 상태로 표시(입장완료 아님)', c => {
+      const art = c.doc.querySelector('#tickets .ticket');
+      return art.classList.contains('dup') && art.querySelector('.t-state').textContent.includes('이미 선점된 좌석');
+    }],
+    ['도장 문구 = 입장 불가', c => c.doc.querySelector('.t-stamp span').textContent.includes('입장 불가')],
+  ], { clickCheckin: true, clickDupConfirm: true, preCheckedTs: '2026-08-20T10:42:00.000Z' });
+
+  // 케이스 8: 정상 선착 입장 → 팝업 없이 입장 완료
+  fails += await runCase('정상 선착 입장', '테스트팔', '010-0000-8888',
+    { n: '테스트팔', c: 'TESTCODE8', t: [{ z: '215구역', s: '3열 5번' }] }, [
+    ['팝업 없음', c => !c.doc.querySelector('#dupOverlay').classList.contains('show')],
+    ['입장 완료 상태', c => {
+      const art = c.doc.querySelector('#tickets .ticket');
+      return art.classList.contains('used') && !art.classList.contains('dup') &&
+             art.querySelector('.t-state').textContent.includes('입장 완료');
+    }],
+    ['도장 문구 = 입장 완료', c => c.doc.querySelector('.t-stamp span').textContent.includes('입장 완료')],
+  ], { clickCheckin: true });
 
   console.log('\n총 실패:', fails);
   process.exit(fails ? 1 : 0);
