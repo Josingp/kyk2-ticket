@@ -31,6 +31,7 @@ body{
 
 /* ---------- 상단 ---------- */
 .brand{text-align:center;padding:6px 0 22px}
+#brandLogo{cursor:pointer}
 .brand img{width:118px;height:auto;filter:drop-shadow(0 6px 18px rgba(0,0,0,.45))}
 .brand h1{font-family:var(--disp);font-weight:700;font-size:21px;letter-spacing:-.01em;margin-top:12px}
 .brand .sub{color:var(--orange);font-family:var(--disp);font-weight:700;font-size:13px;letter-spacing:.14em;margin-top:5px}
@@ -133,6 +134,17 @@ button.primary:focus-visible{outline:3px solid var(--navy);outline-offset:2px}
 .sg-dir{font-size:11px;color:#8985ab;margin-top:9px;text-align:center}
 .sg-my{font-size:12.5px;color:var(--navy);font-weight:700;margin-top:6px;text-align:center;word-break:keep-all}
 
+/* 여러 장 보내기 */
+.ms-list{max-height:220px;overflow:auto;border:1.5px solid #e7e4f3;border-radius:12px;margin-top:8px}
+.ms-row{display:flex;align-items:center;gap:9px;padding:10px 12px;font:600 13px var(--body);color:#38345c;border-top:1px solid #efecf7;cursor:pointer}
+.ms-list .ms-row:first-child{border-top:0}
+.ms-row input{width:17px;height:17px;accent-color:var(--orange)}
+.ms-all{border:1.5px solid #e7e4f3;border-radius:12px;margin-top:12px;background:#faf9fd}
+.ms-box{background:#f4f2fb}
+.ms-box .t-shareurl{border:1.5px solid #dcd9ea}
+.ms-box .t-sharebtns .t-shdel{color:#c2401d}
+.ms-msg{font:600 12px var(--body);color:#66627f;margin-top:9px;min-height:1em}
+
 .again{display:block;width:100%;margin-top:4px;background:none;border:1.5px solid #45418c;
   color:#c9c6ee;border-radius:13px;padding:13px;font:600 14px var(--body);cursor:pointer}
 .again:focus-visible{outline:3px solid var(--orange);outline-offset:2px}
@@ -192,6 +204,18 @@ table.roster{border-collapse:collapse;width:100%;min-width:560px}
 
 .t-name.has-sub{margin-bottom:0}
 .t-subname{text-align:center;font:700 21px var(--disp);color:#c9c6ee;letter-spacing:.01em;margin-top:2px}
+
+.encwarn{background:#fff7ed;border:1.5px solid #f0b27d;border-radius:10px;padding:10px 12px;color:#8a4b12;margin-top:2px}
+.dangerbtn{display:block;width:100%;margin-top:12px;border:1.5px solid #d84a2c;background:#fff;
+  color:#c2401d;border-radius:12px;padding:13px;font:700 13.5px var(--body);cursor:pointer}
+.dangerbtn:active{background:#fdeeea}
+.plink{border:0;background:none;color:#8a86ad;font:600 11.5px var(--body);cursor:pointer;text-decoration:underline}
+.pmodal{position:fixed;inset:0;z-index:50;background:rgba(12,10,38,.72);display:flex;align-items:center;justify-content:center;padding:20px}
+.pmbox{background:#fff;border-radius:18px;padding:22px 20px;max-width:420px;width:100%;max-height:82vh;overflow:auto}
+.pmbox h3{font:700 17px var(--disp);color:var(--navy)}
+.pmbody{margin:12px 0 16px}
+.pmbody p{font-size:12.5px;color:#4c4870;line-height:1.7;margin-top:10px}
+.pmbody b{color:var(--navy)}
 
 /* ---------- 위치 배지 ---------- */
 .geo{display:none;margin:-8px auto 16px;width:fit-content;max-width:100%;padding:7px 14px;border-radius:99px;
@@ -279,7 +303,7 @@ footer{margin-top:34px;text-align:center;color:#7672ab;font-size:11.5px;line-hei
 <div class="wrap">
 
   <header class="brand">
-    <img src="assets/logo.png" alt="신인감독 김연경2 로고">
+    <img src="assets/logo.png" alt="신인감독 김연경2 로고" id="brandLogo" role="button" tabindex="0" title="처음 화면으로">
     <h1 id="evName"></h1>
     <div class="sub" id="evSub"></div>
     <div class="info" id="evInfo"></div>
@@ -315,6 +339,7 @@ footer{margin-top:34px;text-align:center;color:#7672ab;font-size:11.5px;line-hei
     <p class="live-note">입장 시 캡처 화면이 아닌 <b>실시간 화면</b>을 제시해 주세요.<br>(초 단위 시계가 움직여야 유효한 티켓입니다)</p>
     <p class="geo" id="geoBadge"></p>
     <div id="tickets"></div>
+    <div class="card guide" id="multiShare" style="display:none"></div>
     <div class="card guide" id="seatGuide" style="display:none"></div>
     <button class="again" id="btnAgain" type="button">다른 정보로 조회</button>
   </section>
@@ -326,7 +351,11 @@ footer{margin-top:34px;text-align:center;color:#7672ab;font-size:11.5px;line-hei
     <form id="adminForm" autocomplete="off">
       <div class="field">
         <label for="adminPw">비밀번호</label>
-        <input id="adminPw" type="password" inputmode="numeric" maxlength="12" placeholder="비밀번호" required>
+        <input id="adminPw" type="password" inputmode="numeric" maxlength="24" placeholder="비밀번호" required>
+      </div>
+      <div class="field">
+        <label for="adminOtp">인증앱 OTP 6자리 <small style="font-weight:600;color:#8985ab">(OTP 설정 시)</small></label>
+        <input id="adminOtp" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="000000">
       </div>
       <button class="primary" type="submit">로그인</button>
       <p class="msg" id="adminMsg"></p>
@@ -339,6 +368,7 @@ footer{margin-top:34px;text-align:center;color:#7672ab;font-size:11.5px;line-hei
       <h2>티켓 DB 생성 도구</h2>
       <button class="linkbtn" id="btnLogout" type="button">로그아웃</button>
     </div>
+    <p class="desc encwarn" id="encWarn" style="display:none">⚠ 서버 저장 암호화 키(<code>DATA_KEY</code>)가 아직 설정되지 않아 명단이 평문으로 저장됩니다. Vercel 환경변수에 등록해 주세요. (README 참고)</p>
     <p class="desc" style="margin-top:8px">명단 엑셀을 올리면 암호화 후 <b>서버 DB에 바로 적용</b>됩니다. (재배포 불필요, 즉시 반영)
     명단 원본은 서버 저장소(Upstash)에만 보관되고, 공개 DB에는 암호문만 올라갑니다.</p>
     <p class="desc" style="margin-top:8px">열 이름: <code>대분류</code> <code>소분류</code>(동반인·선택) <code>연락처</code> <code>구역</code> <code>좌석</code> (선택: <code>등급</code>)
@@ -411,11 +441,46 @@ footer{margin-top:34px;text-align:center;color:#7672ab;font-size:11.5px;line-hei
         <button id="btnRosterStaff" type="button">스태프 확인용 명단(.xlsx)</button>
       </div>
     </div>
+
+    <div class="subhead"><h3>데이터 파기</h3></div>
+    <p class="desc" style="margin-top:8px">행사 종료 후 서버(Upstash)의 명단·티켓 DB·입장 기록·공유 링크를 전부 삭제합니다.
+    개인정보 파기 의무 이행용이며 <b>되돌릴 수 없습니다.</b> 저장소의 <code>data/db.json</code> 백업과 출력한 스태프 명단, 원본 엑셀은 별도로 삭제하세요.</p>
+    <button class="dangerbtn" id="btnDestroy" type="button">행사 데이터 전체 파기</button>
+    <div class="err" id="destroyErr"></div>
+    <div class="done" id="destroyDone"></div>
+
+    <div class="subhead"><h3>감사 로그</h3><button class="ghost" id="btnAudit" type="button">최근 기록 보기</button></div>
+    <p class="desc" style="margin-top:8px">로그인·명단 발행·입장 취소·파기 기록(시각·IP)이 최근 1,000건 보관됩니다.</p>
+    <div class="tablewrap" id="auditBox" style="display:none"><table class="roster" style="min-width:420px">
+      <thead><tr><th>시각</th><th>행위</th><th>상세</th><th>IP</th></tr></thead>
+      <tbody id="auditBody"></tbody>
+    </table></div>
   </section>
+
+  <!-- 개인정보 처리 안내 -->
+  <div class="pmodal" id="pModal" style="display:none" role="dialog" aria-modal="true" aria-label="개인정보 처리 안내">
+    <div class="pmbox">
+      <h3>개인정보 처리 안내</h3>
+      <div class="pmbody">
+        <p><b>조회 입력값은 서버로 전송되지 않습니다.</b> 티켓 확인 시 입력하는 이름과 연락처 뒤 4자리는
+        이 기기(브라우저) 안에서 티켓을 복호화하는 데만 사용되며, 주최 측 서버로 전송·저장되지 않습니다.</p>
+        <p><b>초대 명단의 보관.</b> 주최 측이 보유한 초대 명단(이름, 연락처 일부(가운데 자리 제외), 좌석,
+        동반인 표기)은 본 행사 입장 운영 목적에 한해 암호화된 형태로 보관하며, 행사 종료 후 지체 없이 파기합니다.
+        공개적으로 전송되는 티켓 데이터는 본인만 열 수 있는 암호문 형태입니다.</p>
+        <p><b>입장 기록.</b> 좌석 단위 입장 여부와 시각은 중복 입장 방지 등 행사 운영 목적으로만 처리되며
+        행사 종료 후 파기합니다.</p>
+        <p><b>위치 정보.</b> 현장 안내 배지를 표시하기 위해 기기에서만 위치를 확인하며,
+        위치 값은 서버로 전송되거나 저장되지 않습니다.</p>
+        <p><b>문의.</b> 초대 안내를 드린 담당자에게 연락 주시면 열람·정정·삭제 요청을 처리해 드립니다.</p>
+      </div>
+      <button class="primary" id="btnPrivacyClose" type="button">닫기</button>
+    </div>
+  </div>
 
   <footer>
     문의는 초대 안내를 드린 담당자에게 부탁드립니다.<br>
-    ⓒ 팬엔터테인먼트 · 신인감독 김연경2
+    ⓒ 팬엔터테인먼트 · 신인감독 김연경2<br>
+    <button class="plink" id="btnPrivacy" type="button">개인정보 처리 안내</button>
   </footer>
 </div>
 
@@ -438,7 +503,7 @@ document.title = CFG.eventName + ' · 모바일 초대 티켓';
 
 /* DB 로드 — 서버(API) 우선, 실패 시 저장소 파일 */
 var DB = null, dbErr = null;
-fetch('/api/db?event=' + encodeURIComponent(CFG.salt))
+var dbReady = fetch('/api/db?event=' + encodeURIComponent(CFG.salt))
   .then(function(r){ if(!r.ok) throw 0; return r.json(); })
   .catch(function(){
     return fetch('data/db.json?v=' + Date.now())
@@ -446,6 +511,16 @@ fetch('/api/db?event=' + encodeURIComponent(CFG.salt))
   })
   .then(function(j){ DB = j; })
   .catch(function(e){ dbErr = e; });
+var freshTried = false;
+/* 방금 명단에 추가된 사람: 엣지 캐시(최대 75초)를 우회해 최신 DB로 1회 재시도 */
+function refreshDBFresh(){
+  if (freshTried) return Promise.resolve(false);
+  freshTried = true;
+  return fetch('/api/db?event=' + encodeURIComponent(CFG.salt) + '&fresh=' + Date.now())
+    .then(function(r){ if(!r.ok) throw 0; return r.json(); })
+    .then(function(j){ DB = j; return true; })
+    .catch(function(){ return false; });
+}
 
 /* 표기 보정 */
 function zoneText(z){ z = String(z||'').trim(); return /구역/.test(z) ? z : z + ' 구역'; }
@@ -512,7 +587,8 @@ function render(person){
           '<div class="t-livehead"><span class="dot"></span>LIVE</div>' +
           '<div class="t-clock js-clock">--:--:--</div>' +
           '<div class="t-date js-date"></div>' +
-          '<div class="t-code">확인코드 <b>' + T.fmtCode(person.c) + '</b></div>' +
+          '<div class="t-code">확인코드 <b class="t-codeval" data-full="' + escA(T.fmtCode(person.c)) + '">' + esc(T.fmtCode(person.c)) + '</b></div>' +
+          '<div class="t-secpat"><i></i><span></span></div>' +
         '</div>' +
       '</div>' +
       '<div class="t-check" data-z="' + escA(tk.z) + '" data-s="' + escA(tk.s) + '">' +
@@ -540,6 +616,7 @@ function render(person){
   refresh();
   startStatusPoll();
   initGeo();
+  renderMultiShare(person);
   buildSeatGuide(person);
   window.scrollTo({ top: 0 });
 }
@@ -552,20 +629,37 @@ $('#form').addEventListener('submit', function(ev){
   var name = $('#inName').value, phone = $('#inPhone').value;
   if (!T.normName(name)) return showMsg('이름을 입력해 주세요.');
   if (T.last4(phone).length < 4) return showMsg('연락처 뒤 4자리를 숫자로 입력해 주세요.');
-  if (dbErr) return showMsg('티켓 데이터를 불러오지 못했습니다. 안내받은 주소로 다시 접속해 주세요.');
-  if (!DB) return showMsg('데이터를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.');
   var btn = $('#btnGo'); btn.disabled = true; btn.textContent = '확인 중…';
-  T.deriveRecord(name, phone, CFG).then(function(d){
-    var box = DB.records && DB.records[d.id];
-    if (!box) throw 0;
-    return T.decryptJSON(d.key, box);
-  }).then(function(person){
-    render(person);
-  }).catch(function(){
-    showMsg('입력하신 정보와 일치하는 티켓이 없습니다. 초대 안내를 받은 이름과 연락처인지 확인해 주세요.');
-  }).finally(function(){
-    btn.disabled = false; btn.textContent = '티켓 확인';
-  });
+
+  function attempt(){
+    return T.deriveRecord(name, phone, CFG).then(function(d){
+      var box = DB && DB.records && DB.records[d.id];
+      if (!box) return null;
+      return T.decryptJSON(d.key, box).catch(function(){ return null; });
+    });
+  }
+  /* DB 로드를 최대 8초 기다렸다가 조회 (로드 전 제출해도 자동 진행) */
+  Promise.race([dbReady, new Promise(function(r){ setTimeout(r, 8000); })])
+    .then(function(){
+      if (dbErr) { showMsg('티켓 데이터를 불러오지 못했습니다. 안내받은 주소로 다시 접속해 주세요.'); throw 'handled'; }
+      if (!DB) { showMsg('데이터를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.'); throw 'handled'; }
+      return attempt();
+    })
+    .then(function(person){
+      if (person) return person;
+      /* 미발견 → 방금 추가된 인원일 수 있으니 최신 DB로 1회 재시도 */
+      return refreshDBFresh().then(function(got){ return got ? attempt() : null; });
+    })
+    .then(function(person){
+      if (!person) { showMsg('입력하신 정보와 일치하는 티켓이 없습니다. 초대 안내를 받은 이름과 연락처인지 확인해 주세요.'); return; }
+      render(person);
+    })
+    .catch(function(e){
+      if (e !== 'handled') showMsg('확인 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
+    })
+    .finally(function(){
+      btn.disabled = false; btn.textContent = '티켓 확인';
+    });
 });
 
 $('#btnAgain').addEventListener('click', function(){
@@ -576,6 +670,8 @@ $('#btnAgain').addEventListener('click', function(){
   $('#tickets').innerHTML = '';
   $('#seatGuide').innerHTML = '';
   $('#seatGuide').style.display = 'none';
+  $('#multiShare').innerHTML = '';
+  $('#multiShare').style.display = 'none';
   $('#inPhone').value = '';
   $('#geoBadge').className = 'geo';
   refresh();
@@ -627,10 +723,14 @@ function pollStatus(){
   if (!curPerson) return;
   apiCheckin({ action: 'status', code: curPerson.c }).then(function(j){
     statusFails = 0;
+    if (j.now) timeOffset = j.now - Date.now();   /* 서버 시간 동기화(보안 패턴 오판 방지) */
     applyCheckins(j.seats || []);
   }).catch(function(e){
-    if (e.status === 404) { hideCheckUI(); stopStatusPoll(); return; } // 서버 저장소 미사용 환경
-    if (++statusFails >= 3) { hideCheckUI(); stopStatusPoll(); }
+    if (e.status === 404) { hideCheckUI(); stopStatusPoll(); return; } // 서버 미사용/명단 밖
+    /* 일시적 네트워크 오류: UI는 유지하고 계속 재시도 (현장 LTE 불안정 대비) */
+    statusFails++;
+    var sts = document.querySelectorAll('#tickets .ticket:not(.used) .t-state');
+    for (var i = 0; i < sts.length; i++) sts[i].textContent = '연결 대기 중… (자동 재시도)';
   });
 }
 function startStatusPoll(){
@@ -644,6 +744,51 @@ function stopStatusPoll(){
   if (statusTimer) { clearInterval(statusTimer); statusTimer = null; }
 }
 window.addEventListener('focus', function(){ if (curPerson) pollStatus(); });
+
+/* ---- 캡처 대응 ---- */
+/* 확인코드 회전 마스킹: 어느 순간에도 전체 코드가 화면에 없어 스크린샷이 불완전해짐.
+   길게 누르면 잠시 전체 표시(수동 대조용). */
+var maskIdx = 0;
+setInterval(function(){
+  maskIdx++;
+  var els = document.querySelectorAll('.t-codeval');
+  for (var i = 0; i < els.length; i++){
+    var el = els[i], full = el.dataset.full || '';
+    if (el.dataset.hold === '1' || !full){ el.textContent = full; continue; }
+    var pos = [], k;
+    for (k = 0; k < full.length; k++) if (full[k] !== '-') pos.push(k);
+    var hide = pos[maskIdx % pos.length];
+    var out = '';
+    for (k = 0; k < full.length; k++) out += (k === hide ? '•' : full[k]);
+    el.textContent = out;
+  }
+}, 650);
+$('#tickets').addEventListener('pointerdown', function(ev){
+  var el = ev.target.closest && ev.target.closest('.t-codeval');
+  if (el){ el.dataset.hold = '1'; el.textContent = el.dataset.full; }
+});
+['pointerup','pointercancel','pointerleave'].forEach(function(evn){
+  document.addEventListener(evn, function(){
+    var els = document.querySelectorAll('.t-codeval[data-hold="1"]');
+    for (var i = 0; i < els.length; i++) delete els[i].dataset.hold;
+  });
+});
+/* 우클릭·드래그·선택 차단 (억제 목적) */
+$('#tickets').addEventListener('contextmenu', function(ev){ ev.preventDefault(); });
+$('#tickets').addEventListener('dragstart', function(ev){ ev.preventDefault(); });
+
+/* 30초 주기 보안 패턴: 스태프 검증 화면과 색·단어가 일치해야 유효 (오래된 캡처는 불일치) */
+var SEC_PATTERNS = [['하늘','#38bdf8'],['주황','#fb923c'],['보라','#a78bfa'],['초록','#34d399'],['분홍','#f472b6'],['금색','#eab308']];
+var timeOffset = 0;   /* 서버-기기 시계 차이 보정 */
+function secPat(){ return SEC_PATTERNS[Math.floor((Date.now() + timeOffset) / 30000) % SEC_PATTERNS.length]; }
+setInterval(function(){
+  var p = secPat();
+  var els = document.querySelectorAll('.t-secpat');
+  for (var i = 0; i < els.length; i++){
+    els[i].querySelector('i').style.background = p[1];
+    els[i].querySelector('span').textContent = '보안 패턴 · ' + p[0];
+  }
+}, 1000);
 /* 화면이 백그라운드로 가면 폴링 중단, 다시 보이면 즉시 갱신 — 서버 부하와 배터리 절약 */
 document.addEventListener('visibilitychange', function(){
   if (document.hidden) stopStatusPoll();
@@ -946,6 +1091,94 @@ $('#tickets').addEventListener('click', function(ev){
   }
 });
 
+/* ---- 로고 클릭 → 처음 화면 ---- */
+(function(){
+  var lg = $('#brandLogo');
+  function goHome(){ location.href = location.pathname; }
+  lg.addEventListener('click', goHome);
+  lg.addEventListener('keydown', function(ev){ if (ev.key === 'Enter' || ev.key === ' ') goHome(); });
+})();
+
+/* ---- 여러 좌석 한 번에 보내기 ---- */
+function renderMultiShare(person){
+  var host = $('#multiShare');
+  if (isSharedView || !person || person.t.length < 2){ host.style.display = 'none'; host.innerHTML = ''; return; }
+  var rows = person.t.map(function(tk, i){
+    var label = esc(String(tk.z).trim() + ' ' + String(tk.s).trim()) + (tk.b ? ' <b>(' + esc(tk.b) + ')</b>' : '');
+    return '<label class="ms-row"><input type="checkbox" data-i="' + i + '"><span>' + label + '</span></label>';
+  }).join('');
+  host.innerHTML =
+    '<h2>여러 좌석 한 번에 보내기 <small>선물 링크</small></h2>' +
+    '<p class="desc">보낼 좌석을 골라 링크 하나로 묶어 전달합니다. 받은 사람은 선택된 좌석 티켓만 보게 됩니다.</p>' +
+    '<label class="ms-row ms-all"><input type="checkbox" id="msAll"><span><b>전체 선택</b> (' + person.t.length + '매)</span></label>' +
+    '<div class="ms-list">' + rows + '</div>' +
+    '<button class="primary" id="msMake" type="button" style="margin-top:12px">선택한 좌석 링크 만들기</button>' +
+    '<div class="t-sharebox ms-box" id="msBox">' +
+      '<input class="t-shareurl" id="msUrl" readonly>' +
+      '<div class="t-sharebtns">' +
+        '<button type="button" id="msCopy">링크 복사</button>' +
+        '<button type="button" id="msShare">공유하기</button>' +
+        '<button type="button" class="t-shdel" id="msDel">삭제</button>' +
+      '</div>' +
+    '</div>' +
+    '<p class="ms-msg" id="msMsg"></p>';
+  host.style.display = 'block';
+}
+var lastMsSeats = null;
+function msSelected(){
+  var out = [];
+  var cbs = document.querySelectorAll('#multiShare .ms-list input[type=checkbox]');
+  for (var i = 0; i < cbs.length; i++)
+    if (cbs[i].checked && curPerson.t[+cbs[i].dataset.i])
+      out.push({ z: String(curPerson.t[+cbs[i].dataset.i].z).trim(), s: String(curPerson.t[+cbs[i].dataset.i].s).trim() });
+  return out;
+}
+function msNote(t){ var m = $('#msMsg'); m.textContent = t; }
+$('#multiShare').addEventListener('change', function(ev){
+  if (ev.target.id === 'msAll'){
+    var on = ev.target.checked;
+    var cbs = document.querySelectorAll('#multiShare .ms-list input[type=checkbox]');
+    for (var i = 0; i < cbs.length; i++) cbs[i].checked = on;
+  }
+});
+$('#multiShare').addEventListener('click', function(ev){
+  var t = ev.target;
+  if (t.id === 'msMake'){
+    var seats = msSelected();
+    if (!seats.length) return msNote('보낼 좌석을 하나 이상 선택해 주세요.');
+    t.disabled = true;
+    apiShare({ action: 'create', code: curPerson.c, seats: seats }).then(function(j){
+      lastMsSeats = seats;
+      $('#msUrl').value = location.origin + location.pathname + '?g=' + j.token;
+      $('#msBox').classList.add('show');
+      msNote(seats.length + '매를 묶은 링크입니다. 같은 좌석 조합이면 언제나 같은 링크가 나옵니다.');
+    }).catch(function(e){ msNote('링크 생성 실패: ' + apiErrMsg(e)); })
+      .finally(function(){ t.disabled = false; });
+    return;
+  }
+  if (t.id === 'msCopy'){
+    var inp = $('#msUrl'); inp.select();
+    var done = function(){ msNote('링크가 복사되었습니다. 카카오톡 등으로 붙여넣어 보내세요.'); };
+    if (navigator.clipboard && navigator.clipboard.writeText)
+      navigator.clipboard.writeText(inp.value).then(done).catch(function(){ try { document.execCommand('copy'); done(); } catch(e){} });
+    else { try { document.execCommand('copy'); done(); } catch(e){} }
+    return;
+  }
+  if (t.id === 'msShare'){
+    var url = $('#msUrl').value;
+    if (navigator.share) navigator.share({ title: CFG.eventName + ' 초대 티켓', text: '좌석 초대 티켓이 도착했어요', url: url }).catch(function(){});
+    else $('#msCopy').click();
+    return;
+  }
+  if (t.id === 'msDel'){
+    if (!lastMsSeats) return msNote('먼저 링크를 만들어 주세요.');
+    if (!window.confirm('이 묶음 링크를 삭제할까요?\n받은 사람은 더 이상 열 수 없습니다.')) return;
+    apiShare({ action: 'revoke', code: curPerson.c, seats: lastMsSeats })
+      .then(function(){ $('#msBox').classList.remove('show'); $('#msUrl').value = ''; lastMsSeats = null; msNote('묶음 링크를 삭제했습니다.'); })
+      .catch(function(e){ msNote('삭제 실패: ' + apiErrMsg(e)); });
+  }
+});
+
 /* 공유 링크(?g=토큰)로 접속한 경우: 해당 좌석 1매만 표시 */
 (function(){
   var g = new URLSearchParams(location.search).get('g');
@@ -953,8 +1186,10 @@ $('#tickets').addEventListener('click', function(ev){
   isSharedView = true;
   $('#lookup').innerHTML = '<h2>공유 티켓 여는 중…</h2><p class="desc">잠시만 기다려 주세요.</p>';
   apiShare({ action: 'resolve', token: g }).then(function(j){
-    render({ n: j.n, c: j.c, t: [j.seat] });
-    $('#hello').innerHTML = '<b>' + esc(j.n) + '</b>님이 보낸 초대 티켓입니다.';
+    var seats = j.seats || (j.seat ? [j.seat] : []);
+    render({ n: j.n, c: j.c, t: seats });
+    $('#hello').innerHTML = '<b>' + esc(j.n) + '</b>님이 보낸 초대 티켓 <b>' + seats.length + '매</b>입니다.' +
+      (j.missing ? '<br><small style="font-weight:600;color:#ffd9c4">좌석 변경으로 ' + j.missing + '매는 이 링크에서 제외되었습니다. 필요하면 보낸 분께 새 링크를 요청하세요.</small>' : '');
     $('#btnAgain').textContent = '처음 화면으로';
   }).catch(function(e){
     $('#lookup').innerHTML = '<h2>공유 링크를 열 수 없습니다</h2>' +
@@ -966,6 +1201,58 @@ $('#tickets').addEventListener('click', function(ev){
 })();
 
 /* ==================== 탭 & 관리자 ==================== */
+function setEncWarn(flag){
+  var el = $('#encWarn');
+  if (el) el.style.display = (flag === false) ? 'block' : 'none';
+}
+
+/* 데이터 파기 */
+$('#btnDestroy').addEventListener('click', function(){
+  var err = $('#destroyErr'), done = $('#destroyDone');
+  err.style.display = 'none'; done.style.display = 'none';
+  if (!window.confirm('서버의 명단·티켓 DB·입장 기록·공유 링크를 전부 삭제합니다.\n되돌릴 수 없습니다. 계속할까요?')) return;
+  var typed = window.prompt('정말 파기하려면 "파기"를 입력하세요.');
+  if (typed !== '파기') return;
+  var btn = this; btn.disabled = true;
+  apiAdmin({ action: 'destroy' }).then(function(){
+    serverPeople = null; rosterBuilt = ''; dashChecks = null; dashLoaded = false;
+    $('#rosterBox').style.display = 'none';
+    $('#dashBox').style.display = 'none';
+    done.textContent = '✔ 서버 데이터 파기 완료. 저장소의 data/db.json 백업, 출력한 스태프 명단, 원본 엑셀 파일도 잊지 말고 삭제하세요.';
+    done.style.display = 'block';
+  }).catch(function(e){
+    err.textContent = '파기 실패: ' + apiErrMsg(e);
+    err.style.display = 'block';
+  }).finally(function(){ btn.disabled = false; });
+});
+
+/* 감사 로그 */
+$('#btnAudit').addEventListener('click', function(){
+  var btn = this; btn.disabled = true;
+  apiAdmin({ action: 'log' }).then(function(j){
+    var tb = $('#auditBody'); tb.innerHTML = '';
+    var names = { login: '로그인', publish: '명단 발행', destroy: '데이터 파기', cancel: '입장 취소' };
+    (j.rows || []).forEach(function(r){
+      var tr = document.createElement('tr');
+      var det = r.role ? ('역할 ' + (r.role === 'a' ? '관리자' : '스태프'))
+        : r.p != null ? (r.p + '명') : (r.z ? r.z + ' ' + r.s : '');
+      tr.innerHTML = '<td style="padding:7px 6px;font-size:11px;white-space:nowrap">' + new Date(r.t).toLocaleString('ko-KR', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' }) + '</td>' +
+        '<td style="padding:7px 6px;font-size:11.5px;font-weight:700">' + esc(names[r.a] || r.a) + '</td>' +
+        '<td style="padding:7px 6px;font-size:11px">' + esc(det) + '</td>' +
+        '<td style="padding:7px 6px;font-size:10.5px;color:#8985ab">' + esc(r.ip || '') + '</td>';
+      tb.appendChild(tr);
+    });
+    if (!(j.rows || []).length) tb.innerHTML = '<tr><td colspan="4" style="padding:10px;font-size:12px;color:#8985ab">기록이 없습니다.</td></tr>';
+    $('#auditBox').style.display = 'block';
+  }).catch(function(e){
+    window.alert('로그를 불러오지 못했습니다: ' + apiErrMsg(e));
+  }).finally(function(){ btn.disabled = false; });
+});
+
+/* 개인정보 처리 안내 모달 */
+$('#btnPrivacy').addEventListener('click', function(){ $('#pModal').style.display = 'flex'; });
+$('#btnPrivacyClose').addEventListener('click', function(){ $('#pModal').style.display = 'none'; });
+$('#pModal').addEventListener('click', function(ev){ if (ev.target === this) this.style.display = 'none'; });
 var ADMIN_HASH = '1f5e0b0c7f0baac5bf80d43beb3d259f1f22295960d0bc158e24bee738c72831';
 var authed = false;
 try { authed = sessionStorage.getItem('kyk2AdminOK') === '1'; } catch(e){}
@@ -1007,8 +1294,11 @@ function loadXLSX(){
 }
 
 /* 로그인 / 로그아웃 — 서버 검증 우선, API 불가 시 로컬 해시 검증 */
-var adminPw = '';
-try { adminPw = sessionStorage.getItem('kyk2AdminPw') || ''; } catch(e){}
+var adminPw = '', adminTk = '';
+try {
+  adminPw = sessionStorage.getItem('kyk2AdminPw') || '';
+  adminTk = sessionStorage.getItem('kyk2AdminTk') || '';
+} catch(e){}
 
 function sha256Hex(str){
   return crypto.subtle.digest('SHA-256', new TextEncoder().encode(str)).then(function(buf){
@@ -1017,10 +1307,22 @@ function sha256Hex(str){
     return out;
   });
 }
+/* 엑셀 숫자 셀에서 앞자리 0이 사라진 경우 복구: 1012345678 → 01012345678 */
+function normPhone(p){
+  var d = String(p == null ? '' : p).replace(/\D/g, '');
+  if (d.length === 10 && /^1[016-9]/.test(d)) d = '0' + d;
+  return d;
+}
+/* 전화번호 최소화 저장: 가운데 자리를 버리고 앞3+뒤4만 보관 (조회·운영에 충분) */
+function maskPhone(p){
+  var d = normPhone(p);
+  if (d.length >= 7) return d.slice(0, 3) + '****' + d.slice(-4);
+  return d;
+}
 function apiAdmin(payload){
   return fetch('/api/admin', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(Object.assign({ pw: adminPw, event: CFG.salt }, payload))
+    body: JSON.stringify(Object.assign({ pw: adminPw || undefined, tk: adminTk || undefined, event: CFG.salt }, payload))
   }).then(function(r){
     return r.json().catch(function(){ return {}; }).then(function(j){
       if (!r.ok) { var e = new Error(j.error || ('HTTP ' + r.status)); e.code = j.error; e.status = r.status; throw e; }
@@ -1033,6 +1335,7 @@ function apiErrMsg(e){
   if (e && e.status === 429) return '시도가 너무 많습니다. 10분 뒤 다시 시도해 주세요.';
   if (e && e.status === 401) return '비밀번호가 올바르지 않습니다. 로그아웃 후 다시 로그인해 주세요.';
   if (e && e.status === 413) return '명단이 너무 커서 한 번에 저장할 수 없습니다. (약 1MB 초과)';
+  if (e && e.status === 409) return '다른 기기에서 방금 명단이 수정되었습니다. [명단 불러오기]로 최신본을 확인한 뒤 다시 적용해 주세요.';
   return '서버에 연결하지 못했습니다. 네트워크를 확인해 주세요.';
 }
 
@@ -1044,32 +1347,45 @@ $('#adminForm').addEventListener('submit', function(ev){
 
   fetch('/api/admin', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'verify', pw: pw, event: CFG.salt })
+    body: JSON.stringify({ action: 'verify', pw: pw, otp: $('#adminOtp').value.trim() || undefined, event: CFG.salt })
   }).then(function(r){
-    if (r.ok) return 'ok';
-    if (r.status === 401) return 'no';
-    if (r.status === 429) return 'limit';
+    if (r.ok) return r.json().then(function(j){ return { v: 'ok', session: j.session || '', encrypted: j.encrypted }; });
+    if (r.status === 401) return r.json().catch(function(){ return {}; }).then(function(j){ return { v: j.error === 'otp_required' ? 'otp' : 'no' }; });
+    if (r.status === 429) return { v: 'limit' };
     throw 0;
   }).catch(function(){
     /* API 사용 불가(로컬 열기 · Upstash 미설정 등) → 로컬 해시로 확인 */
-    return sha256Hex(pw).then(function(h){ return h === ADMIN_HASH ? 'ok' : 'no'; });
-  }).then(function(v){
+    return sha256Hex(pw).then(function(h){ return { v: h === ADMIN_HASH ? 'ok' : 'no' }; });
+  }).then(function(rv){
+    var v = rv.v;
     if (v === 'ok'){
-      authed = true; adminPw = pw;
-      try { sessionStorage.setItem('kyk2AdminOK', '1'); sessionStorage.setItem('kyk2AdminPw', pw); } catch(e){}
+      authed = true;
+      if (rv.session){
+        /* 서버가 세션 토큰을 주면 비밀번호는 저장하지 않는다 */
+        adminTk = rv.session; adminPw = '';
+        try { sessionStorage.setItem('kyk2AdminOK', '1'); sessionStorage.setItem('kyk2AdminTk', rv.session); sessionStorage.removeItem('kyk2AdminPw'); } catch(e){}
+      } else {
+        adminPw = pw; adminTk = '';
+        try { sessionStorage.setItem('kyk2AdminOK', '1'); sessionStorage.setItem('kyk2AdminPw', pw); } catch(e){}
+      }
       $('#adminPw').value = '';
+      $('#adminOtp').value = '';
       refresh();
+      setEncWarn(rv.encrypted);
     } else {
-      m.textContent = v === 'limit' ? '시도가 너무 많습니다. 10분 뒤 다시 시도해 주세요.' : '비밀번호가 올바르지 않습니다.';
+      m.textContent = v === 'limit' ? '시도가 너무 많습니다. 10분 뒤 다시 시도해 주세요.'
+        : v === 'otp' ? '인증앱(Microsoft Authenticator)의 6자리 OTP를 함께 입력해 주세요.'
+        : '비밀번호가 올바르지 않습니다.';
       m.classList.add('show');
       $('#adminPw').value = '';
-      $('#adminPw').focus();
+      if (v !== 'otp') $('#adminOtp').value = '';
+      (v === 'otp' ? $('#adminOtp') : $('#adminPw')).focus();
     }
   }).finally(function(){ btn.disabled = false; });
 });
 $('#btnLogout').addEventListener('click', function(){
-  authed = false; adminPw = '';
-  try { sessionStorage.removeItem('kyk2AdminOK'); sessionStorage.removeItem('kyk2AdminPw'); } catch(e){}
+  authed = false; adminPw = ''; adminTk = '';
+  try { sessionStorage.removeItem('kyk2AdminOK'); sessionStorage.removeItem('kyk2AdminPw'); sessionStorage.removeItem('kyk2AdminTk'); } catch(e){}
   refresh();
 });
 
@@ -1183,12 +1499,13 @@ function tixCanon(t){
     return [String(tk.z).trim(), String(tk.s).trim(), tk.g || '', tk.b || ''];
   }));
 }
-async function applyIncremental(newPeople, prog){
+async function applyIncremental(newPeople, prog, isRetry){
   /* 서버 최신 상태 (엣지 캐시 우회) */
-  var oldPeople = [];
+  var oldPeople = [], baseBuilt = null;
   try {
     var rj = await apiAdmin({ action: 'roster' });
     oldPeople = (rj.roster && rj.roster.people) || [];
+    baseBuilt = (rj.roster && rj.roster.built) || null;
   } catch(e){ oldPeople = []; }
   var oldDb = null;
   try {
@@ -1211,7 +1528,7 @@ async function applyIncremental(newPeople, prog){
     if (op.n !== np.n || tixCanon(op.t) !== tixCanon(np.t)){ changed++; toBuild.push(np); }
     else {
       kept++;
-      if (String(op.p) !== String(np.p)) rosterOnly++;   /* 전체번호만 변경 → 명단만 갱신 */
+      if (maskPhone(op.p) !== maskPhone(np.p)) rosterOnly++;
     }
   });
   var removedPeople = oldPeople.filter(function(p){ return !newKeys.has(keyOf(p)); });
@@ -1241,13 +1558,31 @@ async function applyIncremental(newPeople, prog){
     added = newPeople.length; changed = 0; kept = 0;
   }
 
-  await publishDB(db, newPeople);
+  try {
+    await publishDBBase(db, newPeople, baseBuilt);
+  } catch(e){
+    if (e.status === 409 && !isRetry) {
+      /* 다른 기기가 방금 발행함 → 최신 명단 기준으로 한 번 더 비교·적용 */
+      return applyIncremental(newPeople, prog, true);
+    }
+    throw e;
+  }
   return { db: db, added: added, changed: changed, removed: removedPeople.length,
            kept: kept, rosterOnly: rosterOnly, built: toBuild.length };
 }
+function publishDBBase(db, people, baseBuilt){
+  return apiAdmin({ action: 'publish', db: db, baseBuilt: baseBuilt,
+    roster: { v: 1, built: db.built, people: people } });
+}
 
 /* ---------- 엑셀 변환 → 즉시 서버 적용 ---------- */
+var fileBusy = false;
 async function handleFile(f){
+  if (fileBusy) return;
+  fileBusy = true;
+  try { await handleFileInner(f); } finally { fileBusy = false; }
+}
+async function handleFileInner(f){
   resetAdmin();
   try { await loadXLSX(); }
   catch(e){ return fail('엑셀 처리 라이브러리를 불러오지 못했습니다. 네트워크 연결을 확인하고 다시 시도해 주세요.'); }
@@ -1263,7 +1598,7 @@ async function handleFile(f){
   var groups = new Map(), collisions = [];
   rows.forEach(function(r){
     var key = T.normName(r.name) + '|' + T.last4(r.phone);
-    if (!groups.has(key)) groups.set(key, { n: r.name, p: r.phone, t: [], lns: [] });
+    if (!groups.has(key)) groups.set(key, { n: r.name, p: maskPhone(r.phone), t: [], lns: [] });
     var g = groups.get(key);
     var pd = function(p){ return String(p).replace(/\D/g,''); };
     if (pd(g.p) !== pd(r.phone))
@@ -1328,7 +1663,7 @@ function ensureRoster(){
 }
 function dashRefresh(manual){
   return ensureRoster().then(function(){
-    return apiCheckin({ action: 'list', pw: adminPw });
+    return apiCheckin({ action: 'list', pw: adminPw || undefined, tk: adminTk || undefined });
   }).then(function(j){
     dashChecks = j.checkins || {};
     dashLoaded = true;
@@ -1418,7 +1753,7 @@ $('#dashList').addEventListener('click', function(ev){
   var on = !c.dataset.on;
   if (!window.confirm(c.dataset.z + ' ' + c.dataset.s + ' — 입장 ' + (on ? '처리' : '취소') + '할까요?')) return;
   c.disabled = true;
-  apiCheckin({ action: 'set', pw: adminPw, code: c.dataset.c, z: c.dataset.z, s: c.dataset.s, on: on })
+  apiCheckin({ action: 'set', pw: adminPw || undefined, tk: adminTk || undefined, code: c.dataset.c, z: c.dataset.z, s: c.dataset.s, on: on })
     .then(function(j){
       var f = c.dataset.c + '|' + c.dataset.z + '|' + c.dataset.s;
       if (j.ts) dashChecks[f] = j.ts; else delete dashChecks[f];
@@ -1484,6 +1819,7 @@ $('#btnRosterLoad').addEventListener('click', function(){
   apiAdmin({ action: 'roster' }).then(function(j){
     serverPeople = (j.roster && j.roster.people) || [];
     rosterBuilt = (j.roster && j.roster.built) || '';
+    setEncWarn(j.encrypted);
     renderRoster();
     if (!serverPeople.length)
       $('#rosterInfo').textContent = '서버에 저장된 명단이 없습니다. 엑셀을 업로드하거나 아래에서 행을 추가해 시작하세요.';
@@ -1532,7 +1868,7 @@ function collectRoster(){
     if (!v.s) bad.push('좌석');
     if (bad.length) { tr.classList.add('badrow'); errs.push((i+1) + '번째 행: ' + bad.join(', ') + ' 확인'); continue; }
     var key = T.normName(v.n) + '|' + T.last4(v.p);
-    if (!groups.has(key)) groups.set(key, { n: v.n, p: v.p, c: oldByKey.get(key) || undefined, t: [] });
+    if (!groups.has(key)) groups.set(key, { n: v.n, p: maskPhone(v.p), c: oldByKey.get(key) || undefined, t: [] });
     groups.get(key).t.push({ z: v.z, s: v.s, g: v.g || undefined, b: v.b || undefined });
     ticketCount++;
   }

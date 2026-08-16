@@ -33,7 +33,9 @@ module.exports = async (req, res) => {
   try {
     if (!memLimit(req, 900)) { res.status(429).json({ error: 'too_many' }); return; }
 
-    /* ---- 수신자: 토큰으로 좌석 1매 조회 ---- */
+    /* ---- 수신자: 토큰으로 좌석 조회 (1매 또는 묶음) ----
+       폭파 방지: 명단 수정으로 일부 좌석이 바뀌어도 남은 좌석만으로 링크가 살아있고,
+       빠진 수(missing)를 알려 수신자에게 안내한다. */
     if (body.action === 'resolve') {
       const tok = normCode(body.token);
       if (tok.length < 8) { res.status(400).json({ error: 'bad_token' }); return; }
@@ -43,32 +45,46 @@ module.exports = async (req, res) => {
       let d = null;
       try { d = JSON.parse(raw); } catch (e) {}
       if (!d) { res.status(404).json({ error: 'unknown_token' }); return; }
+      const wanted = Array.isArray(d.seats) ? d.seats : [{ z: d.z, s: d.s }];   // 구버전 토큰 호환
       const roster = await getRosterCached(ev, 10000);
       if (!roster || !roster.people) { res.status(404).json({ error: 'no_roster' }); return; }
       const person = roster.people.find(p => normCode(p.c) === normCode(d.c));
-      const seat = person && (person.t || []).find(tk => norm(tk.z) === d.z && norm(tk.s) === d.s);
-      if (!seat) { res.status(404).json({ error: 'unknown_seat' }); return; }
+      if (!person) { res.status(404).json({ error: 'unknown_seat' }); return; }
+      const found = [];
+      wanted.forEach(w => {
+        const seat = (person.t || []).find(tk => norm(tk.z) === norm(w.z) && norm(tk.s) === norm(w.s));
+        if (seat) found.push({ z: norm(seat.z), s: norm(seat.s), g: seat.g || undefined, b: seat.b || undefined });
+      });
+      if (!found.length) { res.status(404).json({ error: 'unknown_seat' }); return; }
       res.status(200).json({ ok: true, n: person.n, c: person.c,
-        seat: { z: norm(seat.z), s: norm(seat.s), g: seat.g || undefined, b: seat.b || undefined } });
+        seats: found, missing: wanted.length - found.length });
       return;
     }
 
-    /* ---- 이하 소유자(확인코드 인증) ---- */
-    const code = normCode(body.code), z = norm(body.z), s = norm(body.s);
-    if (code.length < 8 || !z || !s) { res.status(400).json({ error: 'bad_seat' }); return; }
+    /* ---- 이하 소유자(확인코드 인증) — 좌석 1매 또는 여러 매(seats 배열) ---- */
+    const code = normCode(body.code);
+    let seats = Array.isArray(body.seats)
+      ? body.seats.map(w => ({ z: norm(w && w.z), s: norm(w && w.s) }))
+      : [{ z: norm(body.z), s: norm(body.s) }];
+    seats = seats.filter(w => w.z && w.s);
+    if (code.length < 8 || !seats.length || seats.length > 40) { res.status(400).json({ error: 'bad_seat' }); return; }
     const roster = await getRosterCached(ev, 10000);
     if (!roster || !roster.people) { res.status(404).json({ error: 'no_roster' }); return; }
     const person = roster.people.find(p => normCode(p.c) === code);
-    const valid = person && (person.t || []).some(tk => norm(tk.z) === z && norm(tk.s) === s);
-    if (!valid) { res.status(404).json({ error: 'unknown_seat' }); return; }
-    const seatKey = 's|' + person.c + '|' + z + '|' + s;
+    const allValid = person && seats.every(w =>
+      (person.t || []).some(tk => norm(tk.z) === w.z && norm(tk.s) === w.s));
+    if (!allValid) { res.status(404).json({ error: 'unknown_seat' }); return; }
+    /* 좌석당/조합당 링크 1개: 같은 조합이면 항상 같은 토큰 (단일 좌석은 기존 키 유지) */
+    const seatKey = seats.length === 1
+      ? 's|' + person.c + '|' + seats[0].z + '|' + seats[0].s
+      : 'm|' + person.c + '|' + seats.map(w => w.z + '\u241F' + w.s).sort().join('\u241E');
 
     if (body.action === 'create') {
       let tok = await redis(['HGET', K, seatKey]);
       if (!tok) {
         tok = makeToken(12);
         await redis(['HSET', K, seatKey, tok]);
-        await redis(['HSET', K, tok, JSON.stringify({ c: person.c, z: z, s: s, t: Date.now() })]);
+        await redis(['HSET', K, tok, JSON.stringify({ c: person.c, seats: seats, t: Date.now() })]);
         bustKey('share', ev);
       }
       res.status(200).json({ ok: true, token: tok });
