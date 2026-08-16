@@ -107,6 +107,8 @@ button.primary:focus-visible{outline:3px solid var(--navy);outline-offset:2px}
 .t-clock{font:700 27px/1.1 var(--disp);letter-spacing:.03em;margin-top:4px;font-variant-numeric:tabular-nums}
 .t-date{font-size:12px;color:#5a568a;margin-top:3px}
 .t-code{margin-top:7px;font-size:11.5px;color:#5a568a}
+.t-qrfallback{width:86px;height:86px;border-radius:10px;border:1.5px dashed #c9c6e4;display:flex;align-items:center;
+  justify-content:center;text-align:center;font:700 10.5px/1.5 var(--body);color:#8985ab;background:#faf9fd}
 .t-code b{font:700 13px var(--disp);color:var(--navy);letter-spacing:.06em}
 .t-notice{margin:13px 4px 4px;color:#fff;font-size:10.5px;line-height:1.65;opacity:.95;
   text-align:left;word-break:keep-all}
@@ -496,7 +498,7 @@ footer{margin-top:34px;text-align:center;color:#7672ab;font-size:11.5px;line-hei
   </footer>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+<script src="assets/qrcode.min.js"></script>
 <script src="assets/config.js"></script>
 <script src="assets/venue-sk.js"></script>
 <script src="assets/ticket-crypto.js"></script>
@@ -561,6 +563,10 @@ setInterval(tick, 250);
 
 /* QR (SVG — 외부 이미지/베이스64 없음) */
 function qrSVG(text){
+  if (typeof qrcode === 'undefined'){
+    /* QR 라이브러리 로드 실패(망 차단 등) → 티켓은 정상 표시, QR 자리만 폴백 */
+    return '<div class="t-qrfallback">QR 준비 중<br>확인코드로<br>검증 가능</div>';
+  }
   var q = qrcode(0, 'M'); q.addData(text); q.make();
   return q.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
 }
@@ -741,8 +747,10 @@ function pollStatus(){
     if (e.status === 404) { hideCheckUI(); stopStatusPoll(); return; } // 서버 미사용/명단 밖
     /* 일시적 네트워크 오류: UI는 유지하고 계속 재시도 (현장 LTE 불안정 대비) */
     statusFails++;
-    var sts = document.querySelectorAll('#tickets .ticket:not(.used) .t-state');
-    for (var i = 0; i < sts.length; i++) sts[i].textContent = '연결 대기 중… (자동 재시도)';
+    try {
+      var sts = document.querySelectorAll('#tickets .ticket:not(.used) .t-state');
+      for (var i = 0; i < sts.length; i++) sts[i].textContent = '연결 대기 중… (자동 재시도)';
+    } catch(x){}
   });
 }
 function startStatusPoll(){
@@ -762,6 +770,7 @@ window.addEventListener('focus', function(){ if (curPerson) pollStatus(); });
    길게 누르면 잠시 전체 표시(수동 대조용). */
 var maskIdx = 0;
 setInterval(function(){
+  if (typeof document === 'undefined' || !document.body) return;
   maskIdx++;
   var els = document.querySelectorAll('.t-codeval');
   for (var i = 0; i < els.length; i++){
@@ -794,6 +803,7 @@ var SEC_PATTERNS = [['하늘','#38bdf8'],['주황','#fb923c'],['보라','#a78bfa
 var timeOffset = 0;   /* 서버-기기 시계 차이 보정 */
 function secPat(){ return SEC_PATTERNS[Math.floor((Date.now() + timeOffset) / 30000) % SEC_PATTERNS.length]; }
 setInterval(function(){
+  if (typeof document === 'undefined' || !document.body) return;
   var p = secPat();
   var els = document.querySelectorAll('.t-secpat');
   for (var i = 0; i < els.length; i++){
@@ -1383,14 +1393,20 @@ var xlsxReady = null;
 function loadXLSX(){
   if (window.XLSX) return Promise.resolve();
   if (xlsxReady) return xlsxReady;
-  xlsxReady = new Promise(function(res, rej){
-    var to = setTimeout(function(){ xlsxReady = null; rej(new Error('xlsx load timeout')); }, 15000);
-    var s = document.createElement('script');
-    s.src = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
-    s.onload = function(){ clearTimeout(to); res(); };
-    s.onerror = function(){ clearTimeout(to); xlsxReady = null; rej(new Error('xlsx load fail')); };
-    document.head.appendChild(s);
-  });
+  function inject(url){
+    return new Promise(function(res, rej){
+      var to = setTimeout(function(){ rej(new Error('xlsx load timeout')); }, 15000);
+      var s = document.createElement('script');
+      s.src = url;
+      s.onload = function(){ clearTimeout(to); res(); };
+      s.onerror = function(){ clearTimeout(to); rej(new Error('xlsx load fail')); };
+      document.head.appendChild(s);
+    });
+  }
+  /* 저장소 번들 우선(외부 CDN 차단 대비) → 실패 시에만 CDN */
+  xlsxReady = inject('assets/xlsx.full.min.js')
+    .catch(function(){ return inject('https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js'); })
+    .catch(function(e){ xlsxReady = null; throw e; });
   return xlsxReady;
 }
 

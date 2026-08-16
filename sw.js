@@ -7,7 +7,7 @@
      즉, 한 번이라도 접속했던 기기는 완전 오프라인에서도 티켓 조회가 된다.
    - 체크인 등 나머지 API는 항상 네트워크 (상태 정합성 유지).
    ============================================================ */
-const VER = 'kyk2-v1';
+const VER = 'kyk2-v2';
 const SHELL = [
   './',
   './index.html',
@@ -16,7 +16,7 @@ const SHELL = [
   './assets/ticket-crypto.js',
   './assets/venue-sk.js',
   './assets/logo.png',
-  'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js',
+  './assets/qrcode.min.js',
   'https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css',
 ];
 
