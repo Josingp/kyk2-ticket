@@ -134,8 +134,18 @@ button.primary:focus-visible{outline:3px solid var(--navy);outline-offset:2px}
 .sg-rl.on{color:var(--orange-deep)}
 .sg-seat{width:11px;height:11px;border-radius:3px;background:#e3e0f0}
 .sg-seat.none{background:transparent}
+.sg-seat.x{background:#f2cbc9}
+.sg-seat.w{background:#a9e3c9}
+.sg-seat.p{background:#f2e19b}
 .sg-seat.mine{background:var(--orange);color:#fff;font:800 7px/11px var(--body);text-align:center;
   box-shadow:0 0 0 1.5px #fff,0 0 0 3px var(--orange)}
+.sg-gate{font:800 9.5px var(--body);color:#c8102e;background:#ffe3ea;border:1px solid #f2b6c3;
+  border-radius:6px;padding:2px 7px;margin:2px 0;white-space:nowrap}
+.sg-leg{font-size:10.5px;color:#8985ab;margin-top:8px;text-align:center}
+.sg-leg i{display:inline-block;width:9px;height:9px;border-radius:2.5px;margin:0 4px -1px 0}
+.sg-leg .lg-x{background:#f2cbc9}
+.sg-leg .lg-w{background:#a9e3c9}
+.sg-leg .lg-p{background:#f2e19b}
 .sg-dir{font-size:11px;color:#8985ab;margin-top:9px;text-align:center}
 .sg-my{font-size:12.5px;color:var(--navy);font-weight:700;margin-top:6px;text-align:center;word-break:keep-all}
 
@@ -889,7 +899,8 @@ function sgSeatNos(s){
 }
 function sgSeats(z){
   if (z._seats) return z._seats;
-  z._seats = z.s.split(';').map(function(t){ var p = t.split(','); return { r: +p[0], c: +p[1], n: +p[2] }; });
+  /* 4번째 값 = 좌석 상태 (o일반 · x사석 · t테이블 · w휠체어 · p예비) — 사석관리 도구 원본과 동일 */
+  z._seats = z.s.split(';').map(function(t){ var p = t.split(','); return { r: +p[0], c: +p[1], n: +p[2], b: (p[3] || 'o') }; });
   return z._seats;
 }
 function sgCIdx(z, s){ return z.flip ? z.nC - 1 - s.c : s.c; }
@@ -908,17 +919,46 @@ function sgSeatPos(V, z, s){
   var stepR = (z.rr[1] - z.rr[0] - 2 * padR) / z.nR;
   return sgRp(V, z.rr[0] + padR + (s.r + 0.5) * stepR, z.a + z.sp/2 - gm - (sgCIdx(z, s) + 0.5) * stepA);
 }
-function sgRoute(V, z){
+function sgAngDiff(a, b){ var d = ((a - b) % 360 + 360) % 360; return Math.min(d, 360 - d); }
+/* 구역별 가장 가까운 출입구 — 사석관리 도구 원본의 실측 보정 데이터 기준
+   · 2층: 1층 출입구 가~라 (gateZone에 인접 구역·좌우 방향이 실측값으로 지정, 나머지는 각도상 최근접)
+   · 3층: 2층 로비 1~10 출입구 (각도상 최근접 = 원본의 "구역 사이" 매핑과 일치) */
+function sgNearGate(V, z){
   if (z.fl === '3층'){
     var best = null, bd = 1e9;
-    V.gateNum.forEach(function(g){
-      var diff = ((g[1] - z.a) % 360 + 360) % 360;
-      var d = Math.min(diff, 360 - diff);
+    (V.gateNum || []).forEach(function(g){
+      var d = sgAngDiff(g[1], z.a);
       if (d < bd){ bd = d; best = g[0]; }
     });
-    return '<b>메인 게이트(2층 로비)</b>로 입장 → 로비의 <b>' + best + '번 출입구</b> 계단으로 3층 이동 → ' + z.id + '구역';
+    return { kind: 'num', no: best, loc: (V.gateNumLoc || {})[String(best)] || '' };
   }
-  return '<b>메인 게이트(2층 로비)</b>로 입장 → 로비에서 <b>' + z.id + '구역</b> 표지를 따라 이동 (2층은 로비와 같은 층)';
+  var gz = (V.gateZone || {})[z.id];
+  if (gz) return { kind: 'ka', name: gz.g, side: gz.s, adj: true };
+  var bn = null, bv = 1e9;
+  Object.keys(V.gateAng || {}).forEach(function(nm){
+    var d = sgAngDiff(V.gateAng[nm], z.a);
+    if (d < bv){ bv = d; bn = nm; }
+  });
+  return bn ? { kind: 'ka', name: bn, adj: false } : null;
+}
+function sgGateZones(V, name){
+  var zs = Object.keys(V.gateZone || {}).filter(function(id){ return V.gateZone[id].g === name; }).sort();
+  return zs.length ? zs.join('·') + ' 구역 사이' : '';
+}
+function sgRoute(V, z){
+  var g = sgNearGate(V, z);
+  if (z.fl === '3층'){
+    return '<b>메인 게이트(2층 로비)</b>로 입장 → 로비의 <b>' + g.no + '번 출입구</b>'
+      + (g.loc ? '(' + g.loc + ')' : '') + ' 계단으로 3층 이동 → ' + z.id + '구역';
+  }
+  var t = '<b>메인 게이트(2층 로비)</b>로 입장 → 로비에서 <b>' + z.id + '구역</b> 표지를 따라 이동 (2층 좌석은 로비와 같은 층)';
+  if (g && g.kind === 'ka'){
+    t += '<br>좌석에서 가장 가까운 출입구는 <b>' + g.name + ' 출입구(1층)</b>';
+    t += g.adj
+      ? ' · ' + (g.side === 'L' ? '1번 좌석 쪽' : '좌석번호 큰 쪽') + '입니다'
+      : (function(){ var w = sgGateZones(V, g.name); return (w ? '(' + w + ')' : '') + ' 방향입니다'; })();
+  }
+  return t;
 }
 function sgOverviewSVG(V, found){
   var s = '<svg viewBox="0 0 ' + V.vw + ' ' + V.vh + '" role="img" aria-label="' + esc(V.name) + ' 좌석 배치도">';
@@ -952,7 +992,12 @@ function sgOverviewSVG(V, found){
       var size = Math.max(1.4, Math.min(4.2, 0.78 * Math.min(stepR, stepA * Math.PI / 180 * rmid)));
       sgSeats(z).forEach(function(st){
         var q = sgSeatPos(V, z, st);
-        s += '<circle cx="' + q[0].toFixed(1) + '" cy="' + q[1].toFixed(1) + '" r="' + (size * 0.55).toFixed(2) + '" fill="#ffffff" fill-opacity=".55"/>';
+        /* 원본 도면과 동일하게 상태별 표기: 사석은 어둡게, 휠체어·예비석은 별색 */
+        var f = st.b === 'x' ? '#5f1414" fill-opacity=".5'
+              : st.b === 'w' ? '#c9f4e2" fill-opacity=".9'
+              : st.b === 'p' ? '#ffe98a" fill-opacity=".9'
+              : '#ffffff" fill-opacity=".55';
+        s += '<circle cx="' + q[0].toFixed(1) + '" cy="' + q[1].toFixed(1) + '" r="' + (size * 0.55).toFixed(2) + '" fill="' + f + '"/>';
       });
     }
     s += '<text x="' + p[0].toFixed(1) + '" y="' + (p[1] + (hit ? 8 : 6)).toFixed(1) + '" text-anchor="middle" font-size="' + (hit ? 26 : 17) + '" font-weight="800" fill="' + (hit ? '#ffffff' : '#55527f') + '">' + z.id + '</text></g>';
@@ -1010,7 +1055,16 @@ function sgDetailHTML(V, e){
   if (V.notes && V.notes[z.id]) h += '<p class="sg-note">ℹ️ ' + esc(V.notes[z.id]) + '</p>';
 
   var cap = '<div class="sg-cap">' + (FU ? '▲ 무대 · 코트 방향 ▲' : '▼ 무대 · 코트 방향 ▼') + '</div>';
+  /* 원본 도면과 동일한 출입구 배지: 구역 뒤쪽 줄에, 실측된 좌우 방향으로 표시 */
+  var gate = (V.gateZone || {})[z.id], gateRow = '';
+  if (gate){
+    var gs = FU ? (gate.s === 'L' ? 'R' : 'L') : gate.s;   /* 도면 표시 방향 기준 좌우 */
+    gateRow = '<div></div><div class="sg-gate" style="grid-column:2 / -1;justify-self:' + (gs === 'L' ? 'start' : 'end') + '">'
+      + (gs === 'L' ? '◀ ' : '') + esc(gate.g) + ' 출입구 (1층) · ' + (gate.s === 'L' ? '1번 좌석 쪽' : '좌석번호 큰 쪽') + (gs === 'R' ? ' ▶' : '') + '</div>';
+  }
   var grid = '<div class="sg-gridwrap"><div class="sg-grid" style="grid-template-columns:auto repeat(' + z.nC + ',11px)">';
+  if (!FU) grid += gateRow;                    /* 위쪽 구역: 출입구가 뒷줄(그림 위) 쪽 */
+  var seen = {};
   for (var i = 0; i < z.nR; i++){
     var r = FU ? i : (z.nR - 1 - i);          /* 표시 열 순서 */
     var mineRow = rowsWithMine[r];
@@ -1019,16 +1073,25 @@ function sgDetailHTML(V, e){
       var st = byPos[r + '|' + dc];
       if (!st){ grid += '<div class="sg-seat none"></div>'; continue; }
       var mine = mineRow && mineRow.indexOf(st.n) !== -1;
-      grid += '<div class="sg-seat' + (mine ? ' mine' : '') + '">' + (mine ? st.n : '') + '</div>';
+      var stc = (!mine && (st.b === 'x' || st.b === 'w' || st.b === 'p')) ? ' ' + st.b : '';
+      if (stc) seen[st.b] = 1;
+      grid += '<div class="sg-seat' + (mine ? ' mine' : stc) + '">' + (mine ? st.n : '') + '</div>';
     }
   }
+  if (FU) grid += gateRow;                     /* 아래쪽 구역: 출입구가 뒷줄(그림 아래) 쪽 */
   grid += '</div></div>';
   h += FU ? (cap + grid) : (grid + cap);
 
-  /* 좌석 번호 진행 방향 (내 열 기준, 표시 순서대로) */
+  /* 상태 좌석 범례 (해당 구역에 있는 것만) */
+  var LEG = { x: '사용하지 않는 좌석(사석)', w: '휠체어석', p: '예비석' };
+  var legs = Object.keys(LEG).filter(function(k){ return seen[k]; });
+  if (legs.length)
+    h += '<p class="sg-leg">' + legs.map(function(k){ return '<i class="lg-' + k + '"></i>' + LEG[k]; }).join(' · ') + '</p>';
+
+  /* 좌석 번호 진행 방향 (내 열 기준, 표시 순서대로 · 번호 없는 휠체어석 제외) */
   var firstMineRow = Object.keys(rowsWithMine)[0];
   if (firstMineRow !== undefined){
-    var rowSeats = sgSeats(z).filter(function(st){ return st.r === +firstMineRow; })
+    var rowSeats = sgSeats(z).filter(function(st){ return st.r === +firstMineRow && st.n > 0; })
       .sort(function(a, b){ return dispCol(a) - dispCol(b); });
     if (rowSeats.length > 1)
       h += '<p class="sg-dir">좌석 번호는 그림 기준 왼쪽 <b>' + rowSeats[0].n + '번</b> → 오른쪽 <b>' + rowSeats[rowSeats.length-1].n + '번</b> 방향입니다</p>';
@@ -1135,7 +1198,18 @@ $('#tickets').addEventListener('click', function(ev){
 
 /* ---- 오프라인·저속망 대응 ---- */
 if ('serviceWorker' in navigator) {
-  try { navigator.serviceWorker.register('sw.js'); } catch(e){}
+  try {
+    /* 새 버전 SW로 교체될 때 1회 자동 새로고침 —
+       배포 후 첫 방문에서 곧바로 최신 배치도·안내가 뜨도록 (수동 새로고침 2번 불필요).
+       최초 설치(controller 없던 상태)에서는 새로고침하지 않음. */
+    var swHadController = !!navigator.serviceWorker.controller, swReloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', function(){
+      if (!swHadController || swReloaded) return;
+      swReloaded = true;
+      location.reload();
+    });
+    navigator.serviceWorker.register('sw.js');
+  } catch(e){}
 }
 function updateNetBar(){
   document.body.classList.toggle('offline', navigator.onLine === false);
