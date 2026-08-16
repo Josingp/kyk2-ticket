@@ -17,6 +17,7 @@ const crypto = require('node:crypto');
 const norm = v => String(v == null ? '' : v).trim();
 const normCode = v => norm(v).replace(/[^0-9a-zA-Z]/g, '').toUpperCase();
 const AB = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+const TTL_MS = 6 * 3600000;   // 공유 링크 유효시간: 생성 후 6시간
 function makeToken(n){
   const b = crypto.randomBytes(n); let s = '';
   for (let i = 0; i < n; i++) s += AB[b[i] % AB.length];
@@ -45,6 +46,16 @@ module.exports = async (req, res) => {
       let d = null;
       try { d = JSON.parse(raw); } catch (e) {}
       if (!d) { res.status(404).json({ error: 'unknown_token' }); return; }
+      /* 생성 후 6시간 경과 → 만료 (지연 정리 포함) */
+      if (!d.t || Date.now() - d.t > TTL_MS) {
+        try {
+          await redis(['HDEL', K, tok]);
+          if (d.k) await redis(['HDEL', K, d.k]);
+          bustKey('share', ev);
+        } catch (e) {}
+        res.status(410).json({ error: 'expired' });
+        return;
+      }
       const wanted = Array.isArray(d.seats) ? d.seats : [{ z: d.z, s: d.s }];   // 구버전 토큰 호환
       const roster = await getRosterCached(ev, 10000);
       if (!roster || !roster.people) { res.status(404).json({ error: 'no_roster' }); return; }
@@ -81,19 +92,36 @@ module.exports = async (req, res) => {
 
     if (body.action === 'create') {
       let tok = await redis(['HGET', K, seatKey]);
+      let exp = null;
+      if (tok) {
+        /* 기존 토큰이 만료됐으면 폐기하고 새로 발급 */
+        const raw0 = await redis(['HGET', K, tok]);
+        let d0 = null;
+        try { d0 = raw0 ? JSON.parse(raw0) : null; } catch (e) {}
+        if (!d0 || !d0.t || Date.now() - d0.t > TTL_MS) {
+          await redis(['HDEL', K, tok]);
+          await redis(['HDEL', K, seatKey]);
+          bustKey('share', ev);
+          tok = null;
+        } else {
+          exp = d0.t + TTL_MS;
+        }
+      }
       if (!tok) {
         /* 두 기기가 동시에 생성해도 토큰은 하나만: 먼저 기록한 쪽이 승자 */
         const cand = makeToken(12);
         const won = await redis(['HSETNX', K, seatKey, cand]);
+        const t0 = Date.now();
         if (won === 1 || won === '1') {
-          await redis(['HSET', K, cand, JSON.stringify({ c: person.c, seats: seats, t: Date.now() })]);
+          await redis(['HSET', K, cand, JSON.stringify({ c: person.c, seats: seats, t: t0, k: seatKey })]);
           tok = cand;
         } else {
           tok = await redis(['HGET', K, seatKey]);
         }
+        exp = t0 + TTL_MS;
         bustKey('share', ev);
       }
-      res.status(200).json({ ok: true, token: tok });
+      res.status(200).json({ ok: true, token: tok, exp: exp });
       return;
     }
 

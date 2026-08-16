@@ -10,6 +10,7 @@
     eventName: '신인감독 김연경2',
     eventSub: '직관 초대 티켓',
     eventInfo: '2026. 8. 20. (목) · 잠실학생체육관',
+    eventDateISO: '2026-08-20',   // 경기일(KST) — 공유 링크 생성 시 안내 문구 분기용
 
     // 티켓 하단 고지 문구
     noticeLines: [
