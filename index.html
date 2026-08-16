@@ -31,6 +31,9 @@ body{
 
 /* ---------- 상단 ---------- */
 .brand{text-align:center;padding:6px 0 22px}
+#netBar{display:none;position:sticky;top:0;z-index:60;background:#8a4b12;color:#fff;
+  font:700 11.5px var(--body);text-align:center;padding:8px 12px;border-radius:0 0 10px 10px}
+body.offline #netBar{display:block}
 #brandLogo{cursor:pointer}
 .brand img{width:118px;height:auto;filter:drop-shadow(0 6px 18px rgba(0,0,0,.45))}
 .brand h1{font-family:var(--disp);font-weight:700;font-size:21px;letter-spacing:-.01em;margin-top:12px}
@@ -310,6 +313,7 @@ footer{margin-top:34px;text-align:center;color:#7672ab;font-size:11.5px;line-hei
 <body>
 <div class="wrap">
 
+  <div id="netBar">📡 인터넷 연결 없음 — 티켓 표시는 계속 유효하며, 입장 처리는 연결되면 자동 반영됩니다</div>
   <header class="brand">
     <img src="assets/logo.png" alt="신인감독 김연경2 로고" id="brandLogo" role="button" tabindex="0" title="처음 화면으로">
     <h1 id="evName"></h1>
@@ -820,8 +824,17 @@ function doStaffCheckin(art, btn){
       applyCheckins([{ z: row.dataset.z, s: row.dataset.s, ts: j.ts }]);
       pollStatus();
     }).catch(function(e){
-      msg.textContent = '처리 실패: ' + apiErrMsg(e);
-      msg.classList.add('show');
+      if (!e.status || e.status >= 500){
+        /* 통신 불가 → 큐에 적재, 연결되면 자동 반영 */
+        enqueueCheckin(curPerson.c, row.dataset.z, row.dataset.s);
+        applyCheckins([{ z: row.dataset.z, s: row.dataset.s, ts: new Date().toISOString() }]);
+        art.querySelector('.t-usedts').textContent = '입장 (동기화 대기)';
+        msg.textContent = '네트워크가 없어 기기에 저장했습니다. 연결되면 자동으로 서버에 반영됩니다.';
+        msg.classList.add('show');
+      } else {
+        msg.textContent = '처리 실패: ' + apiErrMsg(e);
+        msg.classList.add('show');
+      }
     }).finally(function(){ btn.disabled = false; });
 }
 
@@ -1098,6 +1111,48 @@ $('#tickets').addEventListener('click', function(ev){
       .finally(function(){ t.disabled = false; });
   }
 });
+
+/* ---- 오프라인·저속망 대응 ---- */
+if ('serviceWorker' in navigator) {
+  try { navigator.serviceWorker.register('sw.js'); } catch(e){}
+}
+function updateNetBar(){
+  document.body.classList.toggle('offline', navigator.onLine === false);
+}
+window.addEventListener('online', function(){ updateNetBar(); flushCheckinQueue(); if (curPerson) pollStatus(); });
+window.addEventListener('offline', updateNetBar);
+updateNetBar();
+
+/* 입장 처리 오프라인 큐: 전송 실패한 체크인을 기기에 쌓아뒀다가 연결되면 자동 반영.
+   입장 처리(on)는 인증이 필요 없어 안전하게 재전송할 수 있다. */
+var QKEY = 'kyk2Q:' + CFG.salt;
+function readQ(){ try { return JSON.parse(localStorage.getItem(QKEY) || '[]'); } catch(e){ return []; } }
+function writeQ(q){ try { localStorage.setItem(QKEY, JSON.stringify(q)); } catch(e){} }
+function enqueueCheckin(code, z, s){
+  var q = readQ().filter(function(x){ return !(x.c === code && x.z === z && x.s === s); });
+  q.push({ c: code, z: z, s: s, t: Date.now() });
+  writeQ(q);
+}
+var flushing = false;
+function flushCheckinQueue(){
+  if (flushing || navigator.onLine === false) return;
+  var q = readQ();
+  if (!q.length) return;
+  flushing = true;
+  (function next(){
+    var q2 = readQ();
+    if (!q2.length){ flushing = false; if (curPerson) pollStatus(); return; }
+    var it = q2[0];
+    apiCheckin({ action: 'set', code: it.c, z: it.z, s: it.s, on: true }).then(function(){
+      writeQ(readQ().slice(1));
+      next();
+    }).catch(function(e){
+      if (e.status === 404){ writeQ(readQ().slice(1)); next(); }   // 명단에서 사라진 좌석은 폐기
+      else { flushing = false; }                                    // 아직 오프라인 → 다음 기회에
+    });
+  })();
+}
+setInterval(flushCheckinQueue, 20000);
 
 /* ---- 로고 클릭 → 처음 화면 ---- */
 (function(){

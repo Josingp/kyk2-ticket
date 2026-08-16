@@ -39,6 +39,8 @@ button:disabled{opacity:.5}
 #out li{font:700 17px var(--disp);color:#26243f;padding:6px 0;border-bottom:1px dashed #bcd8c5}
 #out li:last-child{border-bottom:0}
 #out .hint{font-size:12.5px;margin-top:12px;line-height:1.6}
+.secpat{display:flex;align-items:center;gap:7px;margin-top:12px;font:800 13px var(--body)}
+.secpat i{width:14px;height:14px;border-radius:99px;display:inline-block}
 #out li{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 #out li .seat{flex:1;min-width:120px}
 #out li .st{font:700 11.5px var(--body);color:#8a6d3b}
@@ -55,6 +57,7 @@ button:disabled{opacity:.5}
 </style>
 </head>
 <body>
+<div id="netBar" style="display:none;position:sticky;top:0;z-index:60;background:#8a4b12;color:#fff;font:700 11.5px 'Pretendard',sans-serif;text-align:center;padding:8px 12px">📡 오프라인 — 입장 처리는 연결되면 자동 반영됩니다</div>
 <div class="wrap">
   <div class="head">
     <img src="assets/logo.png" alt="">
@@ -81,8 +84,49 @@ button:disabled{opacity:.5}
 (function(){
 'use strict';
 var CFG = window.TICKET_CONFIG, T = window.TCrypto;
+if ('serviceWorker' in navigator) { try { navigator.serviceWorker.register('sw.js'); } catch(e){} }
+function updateNetBar(){ document.getElementById('netBar').style.display = (navigator.onLine === false) ? 'block' : 'none'; }
+window.addEventListener('online', function(){ updateNetBar(); flushQ(); refreshStates(); });
+window.addEventListener('offline', updateNetBar);
+var QKEY = 'kyk2Q:' + CFG.salt;
+function readQ(){ try { return JSON.parse(localStorage.getItem(QKEY) || '[]'); } catch(e){ return []; } }
+function writeQ(q){ try { localStorage.setItem(QKEY, JSON.stringify(q)); } catch(e){} }
+function enqueueOn(code, z, s){
+  var q = readQ().filter(function(x){ return !(x.c === code && x.z === z && x.s === s); });
+  q.push({ c: code, z: z, s: s, t: Date.now() });
+  writeQ(q);
+}
+var flushing = false;
+function flushQ(){
+  if (flushing || navigator.onLine === false) return;
+  var q = readQ();
+  if (!q.length) return;
+  flushing = true;
+  (function next(){
+    var q2 = readQ();
+    if (!q2.length){ flushing = false; refreshStates(); return; }
+    var it = q2[0];
+    apiCheckin({ action:'set', code: it.c, z: it.z, s: it.s, on: true }).then(function(){
+      writeQ(readQ().slice(1)); next();
+    }).catch(function(e){
+      if (e.status === 404){ writeQ(readQ().slice(1)); next(); }
+      else { flushing = false; }
+    });
+  })();
+}
+setInterval(flushQ, 20000);
+setTimeout(updateNetBar, 0);
 var $ = function(s){ return document.querySelector(s); };
 var DB = null, dbErr = null;
+var freshTried = false;
+function refreshDBFresh(){
+  if (freshTried) return Promise.resolve(false);
+  freshTried = true;
+  return fetch('/api/db?event=' + encodeURIComponent(CFG.salt) + '&fresh=' + Date.now())
+    .then(function(r){ if(!r.ok) throw 0; return r.json(); })
+    .then(function(j){ DB = j; return true; })
+    .catch(function(){ return false; });
+}
 var ready = fetch('/api/db?event=' + encodeURIComponent(CFG.salt))
   .then(function(r){ if(!r.ok) throw 0; return r.json(); })
   .catch(function(){
@@ -111,8 +155,12 @@ function apiCheckin(payload){
 }
 
 var curCode = '', pollT = null, checkinOff = false;
-var staffPw = '';
-try { staffPw = sessionStorage.getItem('kyk2StaffPw') || ''; } catch(e){}
+var staffPw = '', staffTk = '';
+try {
+  staffPw = sessionStorage.getItem('kyk2StaffPw') || '';
+  staffTk = sessionStorage.getItem('kyk2StaffTk') || '';
+} catch(e){}
+function staffAuthed(){ return !!(staffPw || staffTk); }
 
 function show(ok, html){
   var o = $('#out'); o.className = ok ? 'ok' : 'bad'; o.innerHTML = html;
@@ -121,14 +169,14 @@ function show(ok, html){
 function renderStaffBox(){
   var sb = $('#sb'); if (!sb) return;
   if (checkinOff){ sb.innerHTML=''; return; }
-  if (staffPw){
+  if (staffAuthed()){
     sb.innerHTML = '<button type="button" id="sbAll">전체 입장 처리</button>' +
       '<button type="button" id="sbLock" class="ghostb">스태프 잠금</button><div class="staffmsg" id="sbMsg"></div>';
   } else {
     sb.innerHTML = '<button type="button" id="sbUnlock" class="ghostb">스태프 모드 열기 (입장 처리)</button><div class="staffmsg" id="sbMsg"></div>';
   }
   var tgs = document.querySelectorAll('#out li .tg');
-  for (var i=0;i<tgs.length;i++) tgs[i].style.display = staffPw ? '' : 'none';
+  for (var i=0;i<tgs.length;i++) tgs[i].style.display = staffAuthed() ? '' : 'none';
 }
 function sbErr(m){ var el=$('#sbMsg'); if(el) el.textContent=m; }
 
@@ -150,6 +198,7 @@ function renderStates(seats){
 function refreshStates(){
   if (!curCode || checkinOff) return;
   apiCheckin({ action:'status', code: curCode }).then(function(j){
+    if (j.now) timeOffset = j.now - Date.now();
     renderStates(j.seats||[]);
   }).catch(function(e){
     if (e.status===404 || e.code==='redis_env_missing'){
@@ -171,8 +220,13 @@ function check(codeRaw){
     return T.deriveVerify(code, CFG);
   }).then(function(d){
     var box = DB.verify && DB.verify[d.id];
-    if (!box) throw 0;
-    return T.decryptJSON(d.key, box);
+    if (box) return T.decryptJSON(d.key, box);
+    /* 최신 DB로 1회 재시도 (방금 발행된 코드 대응) */
+    return refreshDBFresh().then(function(got){
+      var b2 = got && DB.verify && DB.verify[d.id];
+      if (!b2) throw 0;
+      return T.decryptJSON(d.key, b2);
+    });
   }).then(function(p){
     curCode = code; checkinOff = false;
     var seats = p.t.map(function(tk){
@@ -186,7 +240,8 @@ function check(codeRaw){
       '<div class="name">' + esc(p.n) + '</div>' +
       '<ul>' + seats + '</ul>' +
       '<div class="staffbox" id="sb"></div>' +
-      '<div class="hint">관람객 화면의 이름·좌석·코드(<b>' + T.fmtCode(code) + '</b>)와 일치하는지, 시계가 움직이는지 확인하세요. 입장 처리된 좌석은 관람객 화면에서도 회색으로 바뀝니다.</div>');
+      '<div class="secpat" id="vPat"></div>' +
+      '<div class="hint">관람객 화면의 이름·좌석·코드(<b>' + T.fmtCode(code) + '</b>)와 일치하는지, 시계가 움직이는지, <b>보안 패턴(색·단어)</b>이 위와 같은지 확인하세요. 셋 중 하나라도 다르면 캡처·위조입니다.</div>');
     renderStaffBox();
     refreshStates();
     if (pollT) clearInterval(pollT);
@@ -198,10 +253,19 @@ function check(codeRaw){
 }
 
 function setSeat(li, on, doneCb){
-  apiCheckin({ action:'set', pw: staffPw, code: curCode, z: li.dataset.z, s: li.dataset.s, on: on })
+  apiCheckin({ action:'set', pw: staffPw || undefined, tk: staffTk || undefined, code: curCode, z: li.dataset.z, s: li.dataset.s, on: on })
     .then(function(){ if (doneCb) doneCb(); refreshStates(); })
     .catch(function(e){
-      if (e.status===401){ staffPw=''; try{sessionStorage.removeItem('kyk2StaffPw');}catch(x){} renderStaffBox(); sbErr('비밀번호가 만료되었습니다. 스태프 모드를 다시 열어주세요.'); }
+      if (on && (!e.status || e.status >= 500)){
+        /* 입장 처리는 오프라인 큐로 — 연결 시 자동 반영 */
+        enqueueOn(curCode, li.dataset.z, li.dataset.s);
+        var st = li.querySelector('.st');
+        st.textContent = '✓ 입장 (동기화 대기)'; st.classList.add('in');
+        sbErr('네트워크가 없어 기기에 저장했습니다. 연결되면 자동 반영됩니다. (대기 ' + readQ().length + '건)');
+        if (doneCb) doneCb();
+        return;
+      }
+      if (e.status===401){ staffPw=''; staffTk=''; try{sessionStorage.removeItem('kyk2StaffPw');sessionStorage.removeItem('kyk2StaffTk');}catch(x){} renderStaffBox(); sbErr('인증이 만료되었습니다. 스태프 모드를 다시 열어주세요.'); }
       else sbErr('처리 실패: ' + (e.code==='redis_env_missing' ? '서버 저장소 미설정' : (e.message||'네트워크 오류')));
     });
 }
@@ -225,9 +289,17 @@ $('#out').addEventListener('click', function(ev){
     if (!pw) return sbErr('비밀번호를 입력해 주세요.');
     t.disabled = true;
     fetch('/api/admin', { method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ action:'verify', pw: pw, event: CFG.salt }) })
+      body: JSON.stringify({ action:'verify', scope:'staff', pw: pw, event: CFG.salt }) })
     .then(function(r){
-      if (r.ok){ staffPw = pw; try{sessionStorage.setItem('kyk2StaffPw', pw);}catch(e){} renderStaffBox(); refreshStates(); }
+      if (r.ok){
+        return r.json().catch(function(){ return {}; }).then(function(j){
+          if (j.session){ staffTk = j.session; staffPw = '';
+            try{ sessionStorage.setItem('kyk2StaffTk', j.session); sessionStorage.removeItem('kyk2StaffPw'); }catch(e){}
+          } else { staffPw = pw; staffTk = '';
+            try{ sessionStorage.setItem('kyk2StaffPw', pw); }catch(e){} }
+          renderStaffBox(); refreshStates();
+        });
+      }
       else if (r.status===401) sbErr('비밀번호가 올바르지 않습니다.');
       else sbErr('서버 오류 (' + r.status + ')');
     }).catch(function(){ sbErr('서버에 연결하지 못했습니다.'); })
@@ -246,10 +318,20 @@ $('#out').addEventListener('click', function(ev){
     return;
   }
   if (t.id === 'sbLock'){
-    staffPw=''; try{sessionStorage.removeItem('kyk2StaffPw');}catch(e){}
+    staffPw=''; staffTk='';
+    try{ sessionStorage.removeItem('kyk2StaffPw'); sessionStorage.removeItem('kyk2StaffTk'); }catch(e){}
     renderStaffBox();
   }
 });
+
+var SEC_PATTERNS = [['하늘','#38bdf8'],['주황','#fb923c'],['보라','#a78bfa'],['초록','#34d399'],['분홍','#f472b6'],['금색','#eab308']];
+var timeOffset = 0;
+setInterval(function(){
+  var el = document.getElementById('vPat');
+  if (!el) return;
+  var p = SEC_PATTERNS[Math.floor((Date.now() + timeOffset) / 30000) % SEC_PATTERNS.length];
+  el.innerHTML = '<i style="background:' + p[1] + '"></i>지금 보안 패턴 · ' + p[0];
+}, 1000);
 
 document.addEventListener('visibilitychange', function(){ if (!document.hidden) refreshStates(); });
 
