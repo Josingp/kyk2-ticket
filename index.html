@@ -822,6 +822,10 @@ function doStaffCheckin(art, btn){
   apiCheckin({ action: 'set', code: curPerson.c, z: row.dataset.z, s: row.dataset.s, on: true })
     .then(function(j){
       applyCheckins([{ z: row.dataset.z, s: row.dataset.s, ts: j.ts }]);
+      if (j.already){
+        msg.textContent = '⚠ 이 좌석은 이미 ' + fmtTs(j.ts) + '에 입장 처리되어 있었습니다. 같은 좌석으로 두 명이 입장을 시도했을 수 있으니 게이트에서 확인해 주세요.';
+        msg.classList.add('show');
+      }
       pollStatus();
     }).catch(function(e){
       if (!e.status || e.status >= 500){

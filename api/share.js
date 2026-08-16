@@ -82,9 +82,15 @@ module.exports = async (req, res) => {
     if (body.action === 'create') {
       let tok = await redis(['HGET', K, seatKey]);
       if (!tok) {
-        tok = makeToken(12);
-        await redis(['HSET', K, seatKey, tok]);
-        await redis(['HSET', K, tok, JSON.stringify({ c: person.c, seats: seats, t: Date.now() })]);
+        /* 두 기기가 동시에 생성해도 토큰은 하나만: 먼저 기록한 쪽이 승자 */
+        const cand = makeToken(12);
+        const won = await redis(['HSETNX', K, seatKey, cand]);
+        if (won === 1 || won === '1') {
+          await redis(['HSET', K, cand, JSON.stringify({ c: person.c, seats: seats, t: Date.now() })]);
+          tok = cand;
+        } else {
+          tok = await redis(['HGET', K, seatKey]);
+        }
         bustKey('share', ev);
       }
       res.status(200).json({ ok: true, token: tok });

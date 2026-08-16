@@ -54,10 +54,18 @@ module.exports = async (req, res) => {
       const person = roster.people.find(p => normCode(p.c) === code);
       const valid = person && (person.t || []).some(tk => norm(tk.z) === z && norm(tk.s) === s);
       if (!valid) { res.status(404).json({ error: 'unknown_seat' }); return; }
+      /* 원자적 선착순: 이미 입장된 좌석이면 덮어쓰지 않고 already 로 알린다.
+         (여러 게이트가 폴링 지연 사이에 같은 좌석을 동시에 처리해도 중복 입장이 드러남) */
+      const field = person.c + '|' + z + '|' + s;
       const ts = new Date().toISOString();
-      await redis(['HSET', K, person.c + '|' + z + '|' + s, ts]);
+      const wrote = await redis(['HSETNX', K, field, ts]);
       bustKey('checkin', ev);
-      res.status(200).json({ ok: true, ts });
+      if (wrote === 1 || wrote === '1') {
+        res.status(200).json({ ok: true, ts, already: false });
+      } else {
+        const cur = await redis(['HGET', K, field]);
+        res.status(200).json({ ok: true, ts: cur || ts, already: true });
+      }
       return;
     }
 

@@ -254,7 +254,12 @@ function check(codeRaw){
 
 function setSeat(li, on, doneCb){
   apiCheckin({ action:'set', pw: staffPw || undefined, tk: staffTk || undefined, code: curCode, z: li.dataset.z, s: li.dataset.s, on: on })
-    .then(function(){ if (doneCb) doneCb(); refreshStates(); })
+    .then(function(j){
+      if (on && j && j.already)
+        sbErr('⚠ ' + li.dataset.z + ' ' + li.dataset.s + ' — 이미 ' + fmtTs(j.ts) + '에 입장 처리된 좌석입니다. 중복 입장 시도 여부를 확인하세요.');
+      if (doneCb) doneCb();
+      refreshStates();
+    })
     .catch(function(e){
       if (on && (!e.status || e.status >= 500)){
         /* 입장 처리는 오프라인 큐로 — 연결 시 자동 반영 */
