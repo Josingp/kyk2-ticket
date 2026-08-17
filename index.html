@@ -167,6 +167,35 @@ button.primary:focus-visible{outline:3px solid var(--navy);outline-offset:2px}
 @keyframes dupShake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-9px)}40%,80%{transform:translateX(9px)}}
 .dupBox.shake{animation:dupShake .4s}
 .ticket.dup .t-state b{color:#e74c3c}
+
+/* ==== 공개 녹화 관람 동의 팝업 ==== */
+.agrOverlay{position:fixed;inset:0;background:rgba(14,11,61,.82);z-index:99990;display:none;
+  align-items:center;justify-content:center;padding:18px;backdrop-filter:blur(3px)}
+.agrOverlay.show{display:flex}
+.agrBox{background:var(--paper);color:#26243f;border-radius:18px;max-width:400px;width:100%;
+  max-height:min(84dvh,660px);display:flex;flex-direction:column;overflow:hidden;
+  box-shadow:0 22px 60px rgba(3,2,24,.6)}
+.agrBox h2{font-family:var(--disp);font-weight:700;font-size:15.5px;color:var(--navy);
+  padding:18px 20px 12px;border-bottom:1px solid #eeece4;flex:0 0 auto}
+.agrBody{overflow-y:auto;padding:14px 20px 6px;-webkit-overflow-scrolling:touch}
+.agrBody .agrLead{font-size:13px;line-height:1.7;color:#3d3a58;word-break:keep-all;margin:0 0 12px}
+.agrBody ol{margin:0;padding:0;list-style:none;counter-reset:agr}
+.agrBody ol li{counter-increment:agr;position:relative;padding-left:20px;font-size:12.5px;
+  line-height:1.7;color:#3d3a58;word-break:keep-all}
+.agrBody ol li::before{content:counter(agr) '.';position:absolute;left:0;top:0;
+  font-weight:800;color:var(--orange-deep)}
+.agrBody ol li + li{margin-top:10px}
+.agrBody ol li b{color:var(--navy-ink)}
+.agrBody .agrStrong{color:#b03a12;font-weight:700}
+.agrBody .agrNote{margin:13px 0 10px;padding:10px 12px;background:var(--paper-dim);
+  border:1px solid #eceadf;border-radius:10px;font-size:12px;line-height:1.65;color:#5a5776;
+  word-break:keep-all}
+.agrFoot{flex:0 0 auto;padding:12px 16px calc(14px + env(safe-area-inset-bottom));
+  border-top:1px solid #eeece4;background:var(--paper)}
+.agrFoot button{width:100%;border:0;border-radius:12px;padding:15px;cursor:pointer;
+  font:700 15px var(--body);color:#fff;background:linear-gradient(135deg,var(--orange),var(--orange-deep));
+  box-shadow:0 8px 22px rgba(201,90,30,.35)}
+.agrFoot button:active{transform:scale(.99)}
 .sg-cap{margin-top:13px;text-align:center;font:700 11px var(--body);color:var(--orange-deep);letter-spacing:.08em}
 .sg-gridwrap{margin-top:7px;overflow-x:auto;padding-bottom:2px}
 .sg-grid{display:grid;gap:2px;align-items:center;width:max-content;margin:0 auto}
@@ -732,12 +761,36 @@ function render(person){
 
 /* 조회 */
 function showMsg(t){ var m=$('#msg'); m.textContent=t; m.classList.add('show'); }
+/* ==== 공개 녹화 관람 동의 게이트 ====
+   티켓 확인 제출 시 동의 팝업을 먼저 띄우고, '확인하였습니다'를 눌러야 조회가 진행된다.
+   (같은 방문 안에서는 한 번만 묻는다 — 오타 재시도 시 반복 방지) */
+var agrConfirmed = false;
+document.addEventListener('click', function(e){
+  var t = e.target;
+  if (t && t.id === 'agrBtn'){
+    agrConfirmed = true;
+    document.getElementById('agrOverlay').classList.remove('show');
+    startLookup();
+    return;
+  }
+  if (t && t.id === 'agrOverlay') t.classList.remove('show');   /* 바깥 탭 = 동의하지 않고 닫기 */
+});
+
 $('#form').addEventListener('submit', function(ev){
   ev.preventDefault();
   $('#msg').classList.remove('show');
   var name = $('#inName').value, phone = $('#inPhone').value;
   if (!T.normName(name)) return showMsg('이름을 입력해 주세요.');
   if (T.last4(phone).length < 4) return showMsg('연락처 뒤 4자리를 숫자로 입력해 주세요.');
+  if (!agrConfirmed){
+    document.getElementById('agrOverlay').classList.add('show');
+    var ab = document.querySelector('#agrBox .agrBody'); if (ab) ab.scrollTop = 0;
+    return;
+  }
+  startLookup();
+});
+function startLookup(){
+  var name = $('#inName').value, phone = $('#inPhone').value;
   var btn = $('#btnGo'); btn.disabled = true; btn.textContent = '확인 중…';
 
   function attempt(){
@@ -764,7 +817,7 @@ $('#form').addEventListener('submit', function(ev){
     .finally(function(){
       btn.disabled = false; btn.textContent = '티켓 확인';
     });
-});
+}
 
 $('#btnAgain').addEventListener('click', function(){
   if (isSharedView){ location.href = location.pathname; return; }
@@ -2227,6 +2280,31 @@ $('#btnRosterStaff').addEventListener('click', function(){
 });
 })();
 </script>
+<div class="agrOverlay" id="agrOverlay" role="dialog" aria-modal="true" aria-labelledby="agrTitle">
+  <div class="agrBox" id="agrBox">
+    <h2 id="agrTitle">공개 녹화 경기 관람 동의</h2>
+    <div class="agrBody">
+      <p class="agrLead">본 행사는 <b>&lt;신인감독 김연경2&gt;</b> 프로그램 제작을 위한 <b>공개 녹화 경기</b>입니다.
+        아래 내용을 확인 및 동의하셔야 입장이 가능합니다. 동행인 모두에게 고지 부탁드립니다.</p>
+      <ol>
+        <li><b>(촬영 및 초상권)</b> 경기장 입장부터 경기 진행 중까지 관람객 촬영이 이루어질 수 있으며,
+          프로그램 및 홍보 콘텐츠에 관람객의 초상·음성 등이 노출될 수 있습니다.
+          <b>입장과 동시에 위 노출에 동의한 것으로 간주됩니다.</b></li>
+        <li><b>(비밀유지)</b> 선수단 구성, 경기 내용·결과, 촬영 내용 등 프로그램과 관련된 모든 정보는
+          <span class="agrStrong">방송일 전까지 제3자 전달, 온라인 게시 등 어떠한 방법으로도 공유·유출할 수 없습니다.</span>
+          위반 시 <span class="agrStrong">퇴장 조치 및 민·형사상 책임, 손해배상 등 법적 조치</span>가 이루어질 수 있습니다.</li>
+        <li><b>(촬영 금지)</b> 경기장 내 <span class="agrStrong">사진·영상 촬영 및 녹음은 일절 금지</span>됩니다.</li>
+        <li><b>(시야 제한)</b> 방송 촬영 카메라 및 장비 설치, 기타 현장 상황에 따라
+          일부 좌석은 경기 관람 시 시야가 일부 제한될 수 있습니다.</li>
+      </ol>
+      <p class="agrNote">※ 동의하지 않을 경우 입장이 제한됩니다.<br>
+        ※ 대표자는 동반 관람객에게도 위 내용을 반드시 안내해 주시기 바랍니다.</p>
+    </div>
+    <div class="agrFoot">
+      <button type="button" id="agrBtn">확인하였습니다</button>
+    </div>
+  </div>
+</div>
 <div class="dupOverlay" id="dupOverlay" role="alertdialog" aria-modal="true" aria-labelledby="dupTitle">
   <div class="dupBox" id="dupBox">
     <div class="dupBig">🚫</div>
