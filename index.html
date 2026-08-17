@@ -46,6 +46,26 @@ body.offline #netBar{display:block}
 .card h2{font-family:var(--disp);font-weight:700;font-size:16px;color:var(--navy)}
 .card p.desc{font-size:13px;color:#6d6a8a;margin-top:6px;line-height:1.55}
 .field{margin-top:16px}
+
+/* ==== 첫 화면 관람 사전 안내 ==== */
+.pregame{margin-top:22px;border-top:1px dashed #d9d5cb;padding-top:18px}
+.pregame h3{font-family:var(--disp);font-weight:700;font-size:14.5px;color:var(--navy);
+  display:flex;align-items:center;gap:6px}
+.pregame > p.pg-intro{font-size:12.5px;color:#6d6a8a;margin-top:6px;line-height:1.6;word-break:keep-all}
+.pg-sec{margin-top:14px;background:var(--paper-dim);border:1px solid #eceadf;border-radius:12px;
+  padding:12px 13px}
+.pg-sec.hot{background:#fdf3ec;border-color:#f2ddc9}
+.pg-sec h4{font-size:13px;font-weight:800;color:var(--navy-ink);margin:0 0 7px;letter-spacing:-.01em}
+.pg-sec ul{list-style:none;margin:0;padding:0}
+.pg-sec li{position:relative;padding-left:11px;font-size:12.5px;line-height:1.68;color:#3d3a58;
+  word-break:keep-all}
+.pg-sec li + li{margin-top:5px}
+.pg-sec li::before{content:'';position:absolute;left:0;top:.62em;width:4px;height:4px;border-radius:50%;
+  background:var(--orange)}
+.pg-sec li b{color:#26243f}
+.pg-sec .pg-strong{color:#b03a12;font-weight:700}
+.pregame .pg-outro{margin-top:13px;font-size:12.5px;line-height:1.6;color:#6d6a8a;text-align:center;
+  word-break:keep-all}
 .field label{display:block;font-size:12.5px;font-weight:700;color:var(--navy);margin-bottom:7px}
 .field input{width:100%;border:1.5px solid #dcd9ea;border-radius:12px;padding:13px 14px;
   font:600 16px var(--body);color:#221f3d;background:#fbfaff;outline:none;
@@ -365,6 +385,57 @@ footer{margin-top:34px;text-align:center;color:#7672ab;font-size:11.5px;line-hei
       <button class="primary" id="btnGo" type="submit">티켓 확인</button>
       <p class="msg" id="msg"></p>
     </form>
+
+    <div class="pregame">
+      <h3>📋 관람 사전 안내 및 주의사항</h3>
+      <p class="pg-intro">관람객 여러분, 안전하고 즐거운 관람을 위해 경기 전 아래 주의사항을 반드시 확인해 주시기 바랍니다.</p>
+
+      <div class="pg-sec hot">
+        <h4>📺 방송 촬영 및 스포일러 엄금</h4>
+        <ul>
+          <li>본 경기는 <b>방송 촬영</b>이 진행되며, 관람 중 모습이 방송 및 온라인에 노출될 수 있습니다. <b>(입장 시 동의 간주)</b></li>
+          <li>선수단, 경기 결과, 촬영 내용 등 관련 정보는 <span class="pg-strong">방송일 전까지 절대 유출(온라인 게시, 제3자 공유 등) 불가</span>합니다.</li>
+          <li>위반 시 <span class="pg-strong">즉각 퇴장 및 민·형사상 법적 조치</span>가 취해질 수 있습니다.</li>
+          <li>경기장 내 <span class="pg-strong">사진·영상 촬영 및 녹음은 일절 금지</span>됩니다. 🚫</li>
+        </ul>
+      </div>
+
+      <div class="pg-sec">
+        <h4>🎒 소지품 및 반입 제한 안내</h4>
+        <ul>
+          <li><b>소지품 제한:</b> 가방 1개, 쇼핑백 1개 (대형 가방, 상자, 아이스박스 반입 불가)</li>
+          <li><b>반입 금지 물품:</b> 주류, 위험 물품(칼·가위 등), 타격/투척 우려 물품(대형 깃발, 막대, 삼각대 등), 반려동물 ❌</li>
+          <li>물품 보관 서비스는 제공되지 않으니 소지품 분실에 주의해 주세요.</li>
+        </ul>
+      </div>
+
+      <div class="pg-sec">
+        <h4>🍔 식음료 반입 안내</h4>
+        <ul>
+          <li>외부 음식 및 음료는 반입할 수 없습니다.</li>
+          <li>단, <b>생수, 체육관 내 매점 구매 식음료, 당일 이벤트 부스 수령 음료</b>만 취식 가능합니다.</li>
+        </ul>
+      </div>
+
+      <div class="pg-sec">
+        <h4>🏟 입장 및 관람 수칙</h4>
+        <ul>
+          <li><b>입장 시간:</b> 경기 2시간 전부터 (현장 상황에 따라 조정 가능)</li>
+          <li>퇴장 시 <b>재입장이 불가</b>합니다.</li>
+          <li>지정 좌석 외 관람 제한 및 코트 내 물건 투척 절대 금지</li>
+          <li>타인 관람 방해, 시야를 가리는 응원 도구, 플래시, 과도한 소음, 만취 시 입장이 제한되거나 퇴장될 수 있습니다.</li>
+        </ul>
+      </div>
+
+      <div class="pg-sec">
+        <h4>🚗 주차 안내</h4>
+        <ul>
+          <li>잠실학생체육관은 <b>주차가 불가</b>합니다. 반드시 <b>대중교통</b>을 이용해 주세요.</li>
+        </ul>
+      </div>
+
+      <p class="pg-outro">안전한 관람을 위해 현장 진행요원의 안내에 적극적인 협조 부탁드립니다. 감사합니다.</p>
+    </div>
   </section>
 
   <!-- 결과 -->
