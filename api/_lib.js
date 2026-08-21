@@ -193,7 +193,7 @@ function memGet(k) {
 }
 function memSet(k, v, ttl) { MEM.store.set(k, { v, exp: Date.now() + ttl }); return v; }
 function bustKey(name, ev) { MEM.store.delete(name + ':' + ev); }
-function bustEvent(ev) { ['roster', 'db', 'checkin', 'share'].forEach(n => bustKey(n, ev)); }
+function bustEvent(ev) { ['roster', 'db', 'checkin', 'auto', 'presence', 'share'].forEach(n => bustKey(n, ev)); }
 
 async function getRosterCached(ev, ttl) {
   const k = 'roster:' + ev;

@@ -7,6 +7,8 @@
    - verify  : 비밀번호 확인만
    - roster  : 서버에 저장된 명단(평문, Redis 내부에만 존재) 반환
    - publish : 새 DB(암호문) + 명단을 Redis에 저장 → 즉시 반영
+   - events  : 서버에 명단이 남아 있는 회차 키 목록 (파기 화면용)
+   - destroy : 해당 회차(event)의 db·roster·checkin·auto·presence·share 삭제 (log 는 보존)
    ============================================================ */
 const { redis, sanitizeEvent, checkPw, pwBlocked, notePwFail, readBody, getRoster, getRosterCached, bustEvent,
   encryptStr, dataKey, makeSession, checkSession, verifyTotpCounter, totpOn, audit } = require('./_lib');
@@ -70,12 +72,33 @@ module.exports = async (req, res) => {
       return;
     }
 
-    /* 데이터 파기 — 행사 종료 후 개인정보 파기 의무 이행용 */
+    /* 보관 중인 회차 목록 — 파기 화면에서 지난 회차 키를 고르기 위한 조회 (명단 키 기준 SCAN) */
+    if (body.action === 'events') {
+      const found = new Set();
+      let cursor = '0', guard = 0;
+      do {
+        const r = await redis(['SCAN', cursor, 'MATCH', 'tickets:*:roster', 'COUNT', '200']);
+        cursor = String(r && r[0] != null ? r[0] : '0');
+        (r && r[1] || []).forEach(k => { const m = /^tickets:([A-Za-z0-9_-]+):roster$/.exec(k); if (m) found.add(m[1]); });
+      } while (cursor !== '0' && ++guard < 20);
+      const events = [];
+      for (const id of Array.from(found).sort()) {
+        let checkins = 0;
+        try { checkins = parseInt(await redis(['HLEN', 'tickets:' + id + ':checkin']) || '0', 10) || 0; } catch (e) {}
+        events.push({ id, roster: true, checkins });
+      }
+      res.status(200).json({ ok: true, events });
+      return;
+    }
+
+    /* 데이터 파기 — 행사 종료 후 개인정보 파기 의무 이행용.
+       event(회차 키)는 body 로 받으므로 현재 회차가 아닌 지난 회차도 키를 지정해 파기할 수 있다.
+       감사 로그(log)는 파기 사실 자체를 남기기 위해 지우지 않는다. */
     if (body.action === 'destroy') {
-      for (const k of ['db', 'roster', 'checkin', 'share'])
+      for (const k of ['db', 'roster', 'checkin', 'auto', 'presence', 'share'])
         await redis(['DEL', K + ':' + k]);
       bustEvent(ev);
-      audit(ev, 'destroy', req, {});   /* 파기 사실 자체는 기록으로 남김 */
+      audit(ev, 'destroy', req, { ev });   /* 파기 사실 자체는 기록으로 남김 */
       res.status(200).json({ ok: true });
       return;
     }

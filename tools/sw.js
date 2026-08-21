@@ -7,14 +7,14 @@
      즉, 한 번이라도 접속했던 기기는 완전 오프라인에서도 티켓 조회가 된다.
    - 체크인 등 나머지 API는 항상 네트워크 (상태 정합성 유지).
    ============================================================ */
-const VER = 'kyk2-v12';  /* 티켓 확인 시 공개 녹화 관람 동의 팝업 */
+const VER = 'kyk2-v12';  /* 8/27 장충체육관 회차: 도면 교체 · 위치 기반 자동 입장 */
 const SHELL = [
   './',
   './index.html',
   './verify.html',
   './assets/config.js',
   './assets/ticket-crypto.js',
-  './assets/venue-sk.js',
+  './assets/venue-jc.js',
   './assets/logo.png',
   './assets/qrcode.min.js',
   'https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css',

@@ -45,6 +45,7 @@ button:disabled{opacity:.5}
 #out li .seat{flex:1;min-width:120px}
 #out li .st{font:700 11.5px var(--body);color:#8a6d3b}
 #out li .st.in{color:#14522b}
+#out li .st.auto{color:#1f6fb2}
 #out li button.tg{border:0;border-radius:8px;padding:7px 11px;font:700 11.5px var(--body);cursor:pointer;
   background:var(--navy);color:#fff;width:auto;margin:0}
 #out li button.tg.off{background:#c2401d}
@@ -140,7 +141,8 @@ function esc(s){ var d=document.createElement('div'); d.textContent=s; return d.
 function escA(s){ return esc(s).replace(/"/g,'&quot;'); }
 function zoneText(z){ z=String(z||'').trim(); return /구역/.test(z)?z:z+' 구역'; }
 function seatText(s){ s=String(s||'').trim(); return /좌석/.test(s)?s:s+' 좌석'; }
-function fmtTs(ts){ return new Date(ts).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',hourCycle:'h23'}); }
+/* 입장 시각은 기기 시간대와 무관하게 행사장 기준(KST)으로 고정 — 관람객 화면(index.html)과 동일 */
+function fmtTs(ts){ return new Date(ts).toLocaleTimeString('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}); }
 
 function apiCheckin(payload){
   return fetch('/api/checkin', {
@@ -186,11 +188,15 @@ function renderStates(seats){
     var li=lis[i], z=li.dataset.z, s=li.dataset.s, hit=null;
     for (var k=0;k<seats.length;k++) if (seats[k].z===z && seats[k].s===s){ hit=seats[k]; break; }
     var st=li.querySelector('.st'), tg=li.querySelector('.tg');
-    if (hit && hit.ts){
-      st.textContent='✓ '+fmtTs(hit.ts)+' 입장'; st.classList.add('in');
+    if (hit && hit.ts && hit.auto){
+      /* 위치 기반 자동 입장: 아직 스태프 확인 전 — [입장]을 누르면 정식 입장으로 승격 */
+      st.textContent='◐ '+fmtTs(hit.ts)+' 위치 자동 · 스태프 확인 필요'; st.classList.add('in'); st.classList.add('auto');
+      tg.textContent='입장 확인'; tg.classList.remove('off'); tg.dataset.on='';
+    } else if (hit && hit.ts){
+      st.textContent='✓ '+fmtTs(hit.ts)+' 입장'; st.classList.add('in'); st.classList.remove('auto');
       tg.textContent='취소'; tg.classList.add('off'); tg.dataset.on='1';
     } else {
-      st.textContent='미입장'; st.classList.remove('in');
+      st.textContent='미입장'; st.classList.remove('in'); st.classList.remove('auto');
       tg.textContent='입장'; tg.classList.remove('off'); tg.dataset.on='';
     }
   }
@@ -250,6 +256,8 @@ function setSeat(li, on, doneCb){
     .then(function(j){
       if (on && j && j.already)
         sbErr('⚠ ' + li.dataset.z + ' ' + li.dataset.s + ' — 이미 ' + fmtTs(j.ts) + '에 입장 처리된 좌석입니다. 중복 입장 시도 여부를 확인하세요.');
+      else if (on && j && j.confirmed)
+        sbErr('✓ ' + li.dataset.z + ' ' + li.dataset.s + ' — 위치로 자동 확인됐던 좌석을 스태프 입장으로 기록했습니다.');
       if (doneCb) doneCb();
       refreshStates();
     })

@@ -13,11 +13,17 @@
    ============================================================ */
 const { redis, sanitizeEvent, getRosterCached, getHashCached, bustKey, memLimit, readBody } = require('./_lib');
 const crypto = require('node:crypto');
+const CFG = require('../assets/config.js');
 
 const norm = v => String(v == null ? '' : v).trim();
 const normCode = v => norm(v).replace(/[^0-9a-zA-Z]/g, '').toUpperCase();
 const AB = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-const TTL_MS = 6 * 3600000;   // 공유 링크 유효시간: 생성 후 6시간
+const TTL_MS = 6 * 3600000;   // 생성 후 최소 유효시간 6시간
+/* 만료 시각 = max(행사 종료 시각(config.schedule.end), 생성 + 6시간)
+   → 행사 전에 미리 보낸 링크는 경기 당일 종료까지 살아 있고, 종료 후에 만든 링크만 6시간 뒤 만료된다. */
+const EVENT_END_MS = Date.parse((CFG.schedule || {}).end || '') || 0;
+function expiresAt(t0) { return Math.max(EVENT_END_MS, (+t0 || 0) + TTL_MS); }
+function expired(d) { return !d || !d.t || Date.now() > expiresAt(d.t); }
 function makeToken(n){
   const b = crypto.randomBytes(n); let s = '';
   for (let i = 0; i < n; i++) s += AB[b[i] % AB.length];
@@ -47,8 +53,8 @@ module.exports = async (req, res) => {
       let d = null;
       try { d = JSON.parse(raw); } catch (e) {}
       if (!d) { res.status(404).json({ error: 'unknown_token' }); return; }
-      /* 생성 후 6시간 경과 → 만료 (지연 정리 포함) */
-      if (!d.t || Date.now() - d.t > TTL_MS) {
+      /* 행사 종료(또는 생성 후 6시간) 경과 → 만료 (지연 정리 포함) */
+      if (expired(d)) {
         try {
           await redis(['HDEL', K, tok]);
           if (d.k) await redis(['HDEL', K, d.k]);
@@ -99,13 +105,13 @@ module.exports = async (req, res) => {
         const raw0 = await redis(['HGET', K, tok]);
         let d0 = null;
         try { d0 = raw0 ? JSON.parse(raw0) : null; } catch (e) {}
-        if (!d0 || !d0.t || Date.now() - d0.t > TTL_MS) {
+        if (expired(d0)) {
           await redis(['HDEL', K, tok]);
           await redis(['HDEL', K, seatKey]);
           bustKey('share', ev);
           tok = null;
         } else {
-          exp = d0.t + TTL_MS;
+          exp = expiresAt(d0.t);
         }
       }
       if (!tok) {
@@ -119,7 +125,7 @@ module.exports = async (req, res) => {
         } else {
           tok = await redis(['HGET', K, seatKey]);
         }
-        exp = t0 + TTL_MS;
+        exp = expiresAt(t0);
         bustKey('share', ev);
       }
       res.status(200).json({ ok: true, token: tok, exp: exp });
