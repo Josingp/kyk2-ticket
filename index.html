@@ -140,6 +140,9 @@ button.primary:focus-visible{outline:3px solid var(--navy);outline-offset:2px}
 .card.guide h2 small{font:700 11px var(--body);color:#8985ab;letter-spacing:.02em}
 .sg-map{margin-top:14px;border:1.5px solid #e7e4f3;border-radius:14px;overflow:hidden;background:#faf9fd}
 .sg-map svg{display:block;width:100%;height:auto}
+.sg-hlword{padding:1px 6px;border-radius:6px}
+.sg-legend{display:flex;flex-wrap:wrap;gap:6px 14px;justify-content:center;margin-top:10px;font:700 11px var(--body);color:#4c4870}
+.sg-legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px;box-sizing:border-box}
 .sg-detail{margin-top:16px;border-top:1.5px solid #edeaf6;padding-top:14px}
 .sg-dh{display:flex;align-items:baseline;gap:8px}
 .sg-dh b{font:700 17px var(--disp);color:var(--navy)}
@@ -1200,17 +1203,68 @@ function sgRot(z, p){
   return [bx + dx*c - dy*si, by + dx*si + dy*c];
 }
 function sgBoxSteps(z){
+  if (z.pc) return { c: z.pc, r: z.pr || z.pc };   /* part: 칸·열 간격 명시 */
   var horiz = (z.face === 'S' || z.face === 'N');
   return { c: horiz ? z.v[2] / z.nC : z.v[3] / z.nC, r: horiz ? z.v[3] / z.nR : z.v[2] / z.nR };
 }
-function sgBoxPos(V, z, s){
-  var x = z.v[0], y = z.v[1], w = z.v[2], h = z.v[3], f = z.face, st = sgBoxSteps(z), cc = sgCIdx(z, s), p;
+/* parts(칸 범위별 블록)가 있는 구역: 좌석이 속한 part */
+function sgPartOf(z, s){
+  if (!z.parts) return null;
+  for (var i = 0; i < z.parts.length; i++){ var q = z.parts[i]; if (s.c >= q.c0 && s.c <= q.c1) return q; }
+  return z.parts[z.parts.length - 1];
+}
+function sgBoxPos(V, z, s, noRot){
+  var q = sgPartOf(z, s), b = q || z, cc = q ? (s.c - q.c0) : sgCIdx(z, s);
+  var x = b.v[0], y = b.v[1], w = b.v[2], h = b.v[3], f = b.face, st = sgBoxSteps(b), p;
   /* 1열(r=0)이 코트에 가장 가까운 줄 · 1번(cc=0)은 코트에서 봤을 때 왼쪽 — 사석관리 도구와 동일 */
   if (f === 'S')      p = [x + (cc + 0.5) * st.c, y + h - (s.r + 0.5) * st.r];
   else if (f === 'N') p = [x + w - (cc + 0.5) * st.c, y + (s.r + 0.5) * st.r];
   else if (f === 'E') p = [x + w - (s.r + 0.5) * st.r, y + h - (cc + 0.5) * st.c];
   else                p = [x + (s.r + 0.5) * st.r, y + (cc + 0.5) * st.c];
-  return sgRot(z, p);
+  return noRot ? p : sgRot(b, p);
+}
+/* part 의 실제 좌석 범위(계단식) 외곽선 — 빈 칸은 제외, pad 만큼 여유 */
+function sgPartOutline(z, q, pad){
+  pad = pad === undefined ? 0.45 : pad;
+  var seats = sgSeats(z), rows = [], r, i;
+  for (r = 0; r < q.nR; r++) rows.push(null);
+  seats.forEach(function(st){
+    if (st.c < q.c0 || st.c > q.c1 || st.r >= q.nR) return;
+    var c = st.c - q.c0, rr = rows[st.r];
+    if (!rr) rows[st.r] = [c, c]; else { if (c < rr[0]) rr[0] = c; if (c > rr[1]) rr[1] = c; }
+  });
+  var f = q.face, x = q.v[0], y = q.v[1], w = q.v[2], h = q.v[3], pc = q.pc, pr = q.pr;
+  /* 로컬 좌표: along(칸 방향) a, depth(열 방향) d 를 면(face)에 따라 절대 좌표로 */
+  function pt(a, d){   /* a: 칸 좌표(0..nC), d: 열 좌표(0..nR, 0열=코트 쪽) */
+    if (f === 'S') return [x + a * pc, y + h - d * pr];
+    if (f === 'N') return [x + w - a * pc, y + d * pr];
+    if (f === 'E') return [x + w - d * pr, y + h - a * pc];
+    return [x + d * pr, y + a * pc];
+  }
+  var left = [], right = [], used = [];
+  for (r = 0; r < q.nR; r++) if (rows[r]) used.push(r);
+  for (i = 0; i < used.length; i++){
+    r = used[i]; var rr = rows[r];
+    var dB = (i === 0) ? r - pad : r, dT = (i === used.length - 1) ? r + 1 + pad : r + 1;   /* 열 경계는 공유, 바깥 열만 pad */
+    left.push(pt(rr[0] - pad, dB)); left.push(pt(rr[0] - pad, dT));
+    right.push(pt(rr[1] + 1 + pad, dB)); right.push(pt(rr[1] + 1 + pad, dT));
+  }
+  if (!left.length) return '';
+  var pts = left.concat(right.reverse()).map(function(pp){ return sgRot(q, pp); });
+  return 'M' + pts.map(function(pp){ return pp[0].toFixed(1) + ' ' + pp[1].toFixed(1); }).join('L') + 'Z';
+}
+/* 회전 사각형(part)의 외접 박스 [x,y,w,h] */
+function sgPartBBox(b){
+  var x = b.v[0], y = b.v[1], w = b.v[2], h = b.v[3];
+  var cs = [[x,y],[x+w,y],[x+w,y+h],[x,y+h]].map(function(p){ return sgRot(b, p); });
+  var xs = cs.map(function(p){ return p[0]; }), ys = cs.map(function(p){ return p[1]; });
+  var x0 = Math.min.apply(null, xs), y0 = Math.min.apply(null, ys);
+  return [x0, y0, Math.max.apply(null, xs) - x0, Math.max.apply(null, ys) - y0];
+}
+function sgRectPath(b){
+  var x = b.v[0], y = b.v[1], w = b.v[2], h = b.v[3];
+  var cs = [[x,y],[x+w,y],[x+w,y+h],[x,y+h]].map(function(p){ return sgRot(b, p); });
+  return 'M' + cs.map(function(p){ return p[0].toFixed(1) + ' ' + p[1].toFixed(1); }).join('L') + 'Z';
 }
 function sgSeatPos(V, z, s){
   if (z.k === 'box') return sgBoxPos(V, z, s);
@@ -1220,6 +1274,7 @@ function sgSeatPos(V, z, s){
   return sgRp(V, z.rr[0] + padR + (s.r + 0.5) * stepR, z.a + z.sp/2 - gm - (sgCIdx(z, s) + 0.5) * stepA);
 }
 function sgSeatSize(V, z){
+  if (z.parts){ var q0 = z.parts[0]; return V.seatPx || Math.max(1.3, Math.min(4.2, 0.72 * Math.min(q0.pc, q0.pr))); }
   if (z.k === 'box'){ var st = sgBoxSteps(z); return Math.max(1.3, Math.min(4.2, 0.75 * Math.min(st.r, st.c))); }
   var gm = V.gm || 1.6, stepA = (z.sp - 2*gm) / z.nC;
   var padR = Math.min(6, (z.rr[1] - z.rr[0]) * 0.1);
@@ -1228,14 +1283,16 @@ function sgSeatSize(V, z){
   return Math.max(1.4, Math.min(4.2, 0.78 * Math.min(stepR, stepA * Math.PI / 180 * rmid)));
 }
 function sgZonePath(V, z){
-  if (z.k === 'box'){
-    var x = z.v[0], y = z.v[1], w = z.v[2], h = z.v[3];
-    var cs = [[x,y],[x+w,y],[x+w,y+h],[x,y+h]].map(function(p){ return sgRot(z, p); });
-    return 'M' + cs.map(function(p){ return p[0].toFixed(1) + ' ' + p[1].toFixed(1); }).join('L') + 'Z';
-  }
+  if (z.path) return z.path;   /* 도면 데이터에 외곽선(쐐기·사다리꼴)이 있으면 그대로 */
+  if (z.parts) return z.parts.map(function(q){ return sgPartOutline(z, q); }).join('');
+  if (z.k === 'box') return sgRectPath(z);
   return sgArc(V, z.rr, z.a, z.sp);
 }
 function sgZoneCenter(V, z){
+  if (z.parts){
+    if (!z._ctr){ var sx = 0, sy = 0, n = 0; sgSeats(z).forEach(function(st){ var q = sgBoxPos(V, z, st); sx += q[0]; sy += q[1]; n++; }); z._ctr = n ? [sx / n, sy / n] : [z.v[0] + z.v[2]/2, z.v[1] + z.v[3]/2]; }
+    return z._ctr;
+  }
   if (z.k === 'box') return [z.v[0] + z.v[2]/2, z.v[1] + z.v[3]/2];
   return sgRp(V, (z.rr[0] + z.rr[1]) / 2, z.a);
 }
@@ -1279,50 +1336,112 @@ function sgRoute(V, z){
   return '<b>메인 게이트(2층 로비)</b>로 입장 → 로비의 <b>' + g.no + '번 출입구</b>' + loc + '로 진입 → ' + z.id + '구역 (2층 좌석은 로비와 같은 층)';
 }
 function sgOverviewSVG(V, found){
+  var HL = V.hl || { f: '#e97132', s: '#c85a1e', t: '#ffffff', dot: '#ffffff', name: '주황색' };
   var s = '<svg viewBox="0 0 ' + V.vw + ' ' + V.vh + '" role="img" aria-label="' + esc(V.name) + ' 좌석 배치도">';
-  if (V.floorR) s += '<circle cx="' + V.cx + '" cy="' + V.cy + '" r="' + V.floorR + '" fill="#f3f1fa"/>';
+  if (V.floorR) s += '<circle cx="' + V.cx + '" cy="' + V.cy + '" r="' + V.floorR + '" fill="' + (V.floorFill || '#f3f1fa') + '"/>';
+  if (V.base) s += '<circle cx="' + V.cx + '" cy="' + V.cy + '" r="' + ((V.base.r0 + V.base.r1) / 2).toFixed(1) + '" fill="none" stroke="' + V.base.f + '" stroke-width="' + (V.base.r1 - V.base.r0).toFixed(1) + '"/>';
   (V.ring || []).forEach(function(r){
     s += '<circle cx="' + V.cx + '" cy="' + V.cy + '" r="' + r.r + '" fill="none" stroke="#e6e3f2" stroke-width="' + r.w + '"/>';
   });
-  /* 기둥(잠실) · 응원단상(장충) 등 부채꼴 구조물 */
+  /* 기둥(잠실) · 응원단상 등 부채꼴 구조물 */
   (V.pillars || []).concat(V.secs || []).forEach(function(x){
     s += '<path d="' + sgArc(V, x.rr, x.a, x.sp) + '" fill="' + (x.f && V.secs ? x.f : '#c6c2da') + '"/>';
     var p = sgRp(V, x.tr || ((x.rr[0] + x.rr[1]) / 2), x.a);
     s += '<text x="' + p[0].toFixed(1) + '" y="' + (p[1] + 4).toFixed(1) + '" text-anchor="middle" font-size="' + (x.fs || 12) + '" font-weight="800" fill="' + (x.tc && V.secs ? x.tc : '#8d89a8') + '">' + esc(x.t || '') + '</text>';
   });
   /* 무대 · 코트 */
-  var c = V.court, bd = c.bd || 12;
-  s += '<rect x="' + (c.x - bd) + '" y="' + (c.y - bd) + '" width="' + (c.w + bd*2) + '" height="' + (c.h + bd*2) + '" rx="8" fill="#2f2b66"/>'
-     + '<rect x="' + c.x + '" y="' + c.y + '" width="' + c.w + '" height="' + c.h + '" rx="4" fill="#e97132"/>'
-     + '<text x="' + (c.x + c.w/2) + '" y="' + (c.y + c.h/2 + 7) + '" text-anchor="middle" font-size="21" font-weight="800" fill="#ffffff">무대 · 코트</text>';
+  var c = V.court;
+  if (c.kind === 'arena'){
+    /* 공식 배치도 스타일: 회색 에이프런 + 마루 코트 + 네트·어택라인 + 팀명 + 로고 */
+    var ap = c.apron, mx = c.x + c.w / 2, my = c.y + c.h / 2;
+    if (ap) s += '<rect x="' + ap.x + '" y="' + ap.y + '" width="' + ap.w + '" height="' + ap.h + '" rx="3" fill="' + (ap.f || '#ebebeb') + '"/>';
+    s += '<rect x="' + c.x + '" y="' + c.y + '" width="' + c.w + '" height="' + c.h + '" fill="' + (c.wood || '#d68340') + '" stroke="' + (c.lines || '#fff') + '" stroke-width="1.6"/>'
+       + '<line x1="' + mx + '" y1="' + c.y + '" x2="' + mx + '" y2="' + (c.y + c.h) + '" stroke="' + (c.lines || '#fff') + '" stroke-width="1.8"/>';
+    [mx - c.w / 6, mx + c.w / 6].forEach(function(ax){
+      s += '<line x1="' + ax.toFixed(1) + '" y1="' + c.y + '" x2="' + ax.toFixed(1) + '" y2="' + (c.y + c.h) + '" stroke="' + (c.lines || '#fff') + '" stroke-width="1.2" stroke-dasharray="4 3"/>';
+    });
+    if (c.teams && c.teams.length === 2){
+      s += '<text x="' + (c.x + c.w * 0.19).toFixed(1) + '" y="' + (c.y + c.h * 0.56).toFixed(1) + '" text-anchor="middle" font-size="10.5" font-weight="800" fill="' + c.teams[0].c + '" stroke="#fff" stroke-width="2.6" paint-order="stroke">' + esc(c.teams[0].t) + '</text>'
+         + '<text x="' + (c.x + c.w * 0.81).toFixed(1) + '" y="' + (c.y + c.h * 0.56).toFixed(1) + '" text-anchor="middle" font-size="10.5" font-weight="800" fill="' + c.teams[1].c + '" stroke="#fff" stroke-width="2.6" paint-order="stroke">' + esc(c.teams[1].t) + '</text>';
+    }
+    if (c.logo){
+      var lw = c.logoW || 80;
+      s += '<image href="' + escA(c.logo) + '" x="' + (mx - lw / 2).toFixed(1) + '" y="' + (my - lw / 2).toFixed(1) + '" width="' + lw + '" height="' + lw + '" preserveAspectRatio="xMidYMid meet"/>';
+    }
+  } else {
+    var bd = c.bd || 12;
+    s += '<rect x="' + (c.x - bd) + '" y="' + (c.y - bd) + '" width="' + (c.w + bd*2) + '" height="' + (c.h + bd*2) + '" rx="8" fill="#2f2b66"/>'
+       + '<rect x="' + c.x + '" y="' + c.y + '" width="' + c.w + '" height="' + c.h + '" rx="4" fill="#e97132"/>'
+       + '<text x="' + (c.x + c.w/2) + '" y="' + (c.y + c.h/2 + 7) + '" text-anchor="middle" font-size="21" font-weight="800" fill="#ffffff">무대 · 코트</text>';
+  }
   /* 벤치 · 전광판 등 직사각 구조물 */
   (V.rects || []).forEach(function(r){
     s += '<rect x="' + r.x + '" y="' + r.y + '" width="' + r.w + '" height="' + r.h + '" rx="' + (r.rx || 3) + '" fill="' + (r.f || '#d8d5e8') + '"'
        + (r.st ? ' stroke="' + r.st + '" stroke-width="1.2"' : '') + '/>';
-    var cy = r.y + r.h/2 + (r.t2 ? -1 : 4);
-    if (r.t)  s += '<text x="' + (r.x + r.w/2) + '" y="' + cy + '" text-anchor="middle" font-size="' + (r.fs || 9) + '" font-weight="800" fill="' + (r.tc || '#fff') + '">' + esc(r.t) + '</text>';
-    if (r.t2) s += '<text x="' + (r.x + r.w/2) + '" y="' + (cy + (r.fs2 ? 10 : 12)) + '" text-anchor="middle" font-size="' + (r.fs2 || 8) + '" font-weight="700" fill="' + (r.tc || '#fff') + '">' + esc(r.t2) + '</text>';
+    var cy = r.y + r.h/2 + (r.t2 ? -1 : (r.fs || 9) * 0.36);
+    if (r.t)  s += '<text x="' + (r.x + r.w/2) + '" y="' + cy.toFixed(1) + '" text-anchor="middle" font-size="' + (r.fs || 9) + '" font-weight="800" fill="' + (r.tc || '#fff') + '">' + esc(r.t) + '</text>';
+    if (r.t2) s += '<text x="' + (r.x + r.w/2) + '" y="' + (cy + (r.fs2 ? 10 : 12)).toFixed(1) + '" text-anchor="middle" font-size="' + (r.fs2 || 8) + '" font-weight="700" fill="' + (r.tc || '#fff') + '">' + esc(r.t2) + '</text>';
   });
   /* 구역 */
+  var defs = '';
   V.zones.forEach(function(z){
     var hit = found.get(z.id);
     var d = sgZonePath(V, z);
     var p = sgZoneCenter(V, z);
-    var thin = z.k === 'box' && z.v[3] < 26, small = z.k === 'box' && !z.rot && z.v[2] < 44;
-    var fs = z.k === 'box' ? (thin ? (hit ? 11 : 9) : small ? (hit ? 15 : 11) : (hit ? 20 : 13)) : (hit ? 26 : 17);
-    s += '<g class="sg-zone' + (hit ? ' hl' : '') + '" data-zone="' + z.id + '">'
-      + '<path d="' + d + '" fill="' + (hit ? '#e97132' : '#eceaf6') + '" stroke="' + (hit ? '#c85a1e' : '#d3d0e6') + '" stroke-width="' + (hit ? 2 : 1) + '"/>';
+    var fs;
+    if (z.k === 'box'){ var mn = Math.min(z.v[2], z.v[3]); fs = mn < 22 ? 9 : mn < 36 ? 12 : 15; }
+    else fs = 18;
+    if (hit) fs += 3;
+    var fill = hit ? HL.f : (z.c || '#eceaf6');
+    var stroke = hit ? HL.s : (z.c ? '#ffffff' : '#d3d0e6');
+    var tcol = hit ? HL.t : (z.c ? '#ffffff' : '#55527f');
+    s += '<g class="sg-zone' + (hit ? ' hl' : '') + '" data-zone="' + z.id + '">';
+    if (z.parts){
+      /* 좌석 단위 블록(1층): 실제 좌석 네모를 그대로 — 내 구역이면 블록 바탕을 노랗게 */
+      var sp = sgSeatSize(V, z), half = sp / 2, seatsP = sgSeats(z);
+      if (hit) s += '<path d="' + d + '" fill="' + HL.f + '" fill-opacity=".6" stroke="' + HL.s + '" stroke-width="1.6" stroke-linejoin="round"/>';
+      z.parts.forEach(function(q){
+        var cx = q.v[0] + q.v[2]/2, cy = q.v[1] + q.v[3]/2;
+        s += '<g' + (q.rot ? ' transform="rotate(' + q.rot + ' ' + cx.toFixed(1) + ' ' + cy.toFixed(1) + ')"' : '') + ' fill="' + (hit ? HL.dot : (z.c || '#c6c2da')) + '"' + (hit ? ' fill-opacity=".6"' : '') + '>';
+        seatsP.forEach(function(st){
+          if (sgPartOf(z, st) !== q) return;
+          var pr = sgBoxPos(V, z, st, true);
+          s += '<rect x="' + (pr[0] - half).toFixed(1) + '" y="' + (pr[1] - half).toFixed(1) + '" width="' + sp.toFixed(1) + '" height="' + sp.toFixed(1) + '" rx=".6"/>';
+        });
+        s += '</g>';
+      });
+      /* 구역 이름은 티켓링크처럼 블록 바깥 코트 쪽에 */
+      var lfs = hit ? 14 : 12, lb = sgPartBBox(z.parts[0]), lx, ly, la = 'middle';
+      if (z.face === 'N'){ lx = lb[0] + lb[2]/2; ly = lb[1] - 4; }
+      else if (z.face === 'S'){ lx = lb[0] + lb[2]/2; ly = lb[1] + lb[3] + lfs; }
+      else if (z.face === 'E'){ lx = lb[0] + lb[2] + 4; ly = lb[1] + lb[3]/2 + lfs * 0.36; la = 'start'; }
+      else { lx = lb[0] - 4; ly = lb[1] + lb[3]/2 + lfs * 0.36; la = 'end'; }
+      s += '<text x="' + lx.toFixed(1) + '" y="' + ly.toFixed(1) + '" text-anchor="' + la + '" font-size="' + lfs + '" font-weight="800" fill="' + (hit ? HL.t : '#2b2b3a') + '" stroke="#ffffff" stroke-width="3" stroke-linejoin="round" paint-order="stroke">' + z.id + '</text></g>';
+      return;
+    }
+    s += '<path d="' + d + '" fill="' + fill + '" stroke="' + stroke + '" stroke-width="' + (hit ? 2.5 : (z.c ? 1.4 : 1)) + '" stroke-linejoin="round"/>';
+    if (!hit && V.texture2 && z.k === 'sec'){
+      /* 2층 좌석 점 텍스처 (티켓링크 확대 화면처럼) */
+      var tr = (sgSeatSize(V, z) * 0.42).toFixed(2);
+      s += '<g fill="#ffffff" fill-opacity=".5">';
+      sgSeats(z).forEach(function(st){ var q = sgSeatPos(V, z, st); s += '<circle cx="' + q[0].toFixed(1) + '" cy="' + q[1].toFixed(1) + '" r="' + tr + '"/>'; });
+      s += '</g>';
+    }
     if (hit){
-      /* 구역 안 전체 좌석 점 (도면 데이터) */
-      var size = sgSeatSize(V, z);
+      /* 구역 안 전체 좌석 점 (도면 데이터) — 외곽선으로 잘라 쐐기 모양 밖으로 나가지 않게 */
+      var size = sgSeatSize(V, z), cid = 'sgc-' + z.id;
+      defs += '<clipPath id="' + cid + '"><path d="' + d + '"/></clipPath>';
+      s += '<g clip-path="url(#' + cid + ')">';
       sgSeats(z).forEach(function(st){
         var q = sgSeatPos(V, z, st);
-        s += '<circle cx="' + q[0].toFixed(1) + '" cy="' + q[1].toFixed(1) + '" r="' + (size * 0.55).toFixed(2) + '" fill="#ffffff" fill-opacity=".55"/>';
+        s += '<circle cx="' + q[0].toFixed(1) + '" cy="' + q[1].toFixed(1) + '" r="' + (size * 0.55).toFixed(2) + '" fill="' + HL.dot + '" fill-opacity="' + (V.hl ? '.32' : '.55') + '"/>';
       });
+      s += '</g>';
     }
-    s += '<text x="' + p[0].toFixed(1) + '" y="' + (p[1] + fs * 0.36).toFixed(1) + '" text-anchor="middle" font-size="' + fs + '" font-weight="800" fill="' + (hit ? '#ffffff' : '#55527f') + '"'
-      + (hit && z.k === 'box' ? ' stroke="#b34a17" stroke-width="3" paint-order="stroke"' : '') + '>' + z.id + '</text></g>';
+    s += '<text x="' + p[0].toFixed(1) + '" y="' + (p[1] + fs * 0.36).toFixed(1) + '" text-anchor="middle" font-size="' + fs + '" font-weight="800" fill="' + tcol + '"'
+      + (hit && !V.hl ? ' stroke="#b34a17" stroke-width="3" paint-order="stroke"' : '') + '>' + z.id + '</text></g>';
   });
+  if (defs) s += '<defs>' + defs + '</defs>';
   /* 전광판(잠실, 부채꼴) */
   (V.over || []).forEach(function(x){
     var p = sgRp(V, (x.rr[0] + x.rr[1]) / 2, x.a);
@@ -1335,9 +1454,9 @@ function sgOverviewSVG(V, found){
       var st = sgSeats(e.z).filter(function(x){ return x.r === m.row - 1 && x.n === m.n; })[0];
       if (!st) return;
       var q = sgSeatPos(V, e.z, st);
-      s += '<circle class="sg-dot-mine" cx="' + q[0].toFixed(1) + '" cy="' + q[1].toFixed(1) + '" r="7" fill="#ffffff" stroke="#b34a17" stroke-width="2.6">'
+      s += '<circle class="sg-dot-mine" cx="' + q[0].toFixed(1) + '" cy="' + q[1].toFixed(1) + '" r="7" fill="#ffffff" stroke="' + HL.s + '" stroke-width="2.6">'
          + '<animate attributeName="r" values="6;9;6" dur="1.6s" repeatCount="indefinite"/></circle>'
-         + '<circle cx="' + q[0].toFixed(1) + '" cy="' + q[1].toFixed(1) + '" r="2.6" fill="#b34a17"/>';
+         + '<circle cx="' + q[0].toFixed(1) + '" cy="' + q[1].toFixed(1) + '" r="2.6" fill="' + HL.s + '"/>';
     });
   });
   /* 출입구 */
@@ -1352,16 +1471,30 @@ function sgOverviewSVG(V, found){
       s += '<circle cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="9.5" fill="#FFC61A" stroke="#C8102E" stroke-width="1.6"/>'
          + '<text x="' + p[0].toFixed(1) + '" y="' + (p[1]+3.6).toFixed(1) + '" text-anchor="middle" font-size="10" font-weight="800" fill="#C8102E">' + g[0] + '</text>';
     });
+  } else if (V.gateStyle){
+    /* 장충(공식 배치도 스타일): 스탠드를 가르는 흰 통로 + 안쪽 끝의 회색 GATE 표찰(글자는 통로 방향) + 휠체어석 표시 */
+    var gs = V.gateStyle;
+    (V.gateNum || []).forEach(function(g){
+      var ang = g[1], p = sgRp(V, V.gateR || 330, ang);
+      s += '<path d="' + sgArc(V, gs.strip, ang, gs.stripDeg || 2.6, 0) + '" fill="#ffffff"/>';
+      var rot = 90 - ang;                       /* 표찰의 위쪽이 바깥(통로)을 향하게 */
+      var tr = ((rot - 90) % 360 + 540) % 360 - 180;   /* 글자: 바깥 방향으로 읽되 뒤집히면 180° 돌려 바로 세움 */
+      if (tr > 90 || tr < -90) tr += 180;
+      s += '<g transform="translate(' + p[0].toFixed(1) + ' ' + p[1].toFixed(1) + ')">'
+         + '<rect x="' + (-gs.tabW/2).toFixed(1) + '" y="' + (-gs.tabH/2).toFixed(1) + '" width="' + gs.tabW + '" height="' + gs.tabH + '" rx="4" fill="' + gs.tabF + '" transform="rotate(' + rot.toFixed(1) + ')"/>'
+         + '<text transform="rotate(' + tr.toFixed(1) + ')" y="3.2" text-anchor="middle" font-size="9.5" font-weight="800" fill="' + gs.tabT + '">GATE ' + g[0] + '</text></g>';
+      if ((V.gateWc || []).indexOf(g[0]) !== -1){
+        var w = sgRp(V, gs.wcR, ang);
+        s += '<text x="' + w[0].toFixed(1) + '" y="' + (w[1] + 5).toFixed(1) + '" text-anchor="middle" font-size="14">♿</text>';
+      }
+    });
   } else {
-    /* 장충: 2층 스탠드 사이 통로 입구(GATE 1~8) — 스탠드를 뚫고 안쪽 통로로 나오는 개구부 + 번호 */
     (V.gateNum || []).forEach(function(g){
       var p = sgRp(V, V.gateR || 378, g[1]);
       s += '<path d="' + sgArc(V, [300, 334], g[1], 6.2, 0) + '" fill="#FFC61A" stroke="#E0A400" stroke-width="1.2"/>'
          + '<circle cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="10" fill="#FFC61A" stroke="#C8102E" stroke-width="1.6"/>'
          + '<text x="' + p[0].toFixed(1) + '" y="' + (p[1]+3.8).toFixed(1) + '" text-anchor="middle" font-size="10.5" font-weight="800" fill="#C8102E">' + g[0] + '</text>';
     });
-    var q0 = sgRp(V, (V.gateR || 378) + 24, (V.gateNum && V.gateNum[0]) ? V.gateNum[0][1] : 270);
-    s += '<text x="' + q0[0].toFixed(1) + '" y="' + (q0[1] + 4).toFixed(1) + '" text-anchor="middle" font-size="8.5" font-weight="800" fill="#C8102E">GATE</text>';
   }
   return s + '</svg>';
 }
@@ -1482,9 +1615,14 @@ function buildSeatGuide(person){
     }
   });
   if (!found.size){ host.style.display = 'none'; return; }
+  var hl = V.hl || { f: '#e97132', t: '#ffffff', name: '주황색' };
   var h = '<h2>좌석 위치 안내 <small>' + esc(V.name) + '</small></h2>'
-    + '<p class="desc">배치도의 <b style="color:var(--orange-deep)">주황색</b>이 내 구역, 흰 점 테두리가 내 좌석 위치입니다.</p>'
+    + '<p class="desc">배치도의 <b class="sg-hlword" style="background:' + hl.f + ';color:' + (hl.t || '#fff') + '">' + esc(hl.name) + '</b>이 내 구역, 흰 점 테두리가 내 좌석 위치입니다.</p>'
     + '<div class="sg-map">' + sgOverviewSVG(V, found) + '</div>';
+  if (V.legend && V.legend.length){
+    h += '<div class="sg-legend">' + V.legend.map(function(l){ return '<span><i style="background:' + l.c + '"></i>' + esc(l.t) + '</span>'; }).join('')
+       + '<span><i style="background:' + hl.f + ';border:1.5px solid ' + (V.hl ? V.hl.s : '#c85a1e') + '"></i>내 구역</span></div>';
+  }
   found.forEach(function(e){ h += sgDetailHTML(V, e); });
   host.innerHTML = h;
   host.style.display = 'block';
