@@ -4,7 +4,7 @@
    검증 범위: 조회 폼 → 암호화 레코드 복호화 → 티켓 렌더 → 좌석 안내
    (미니맵·상세 방향·출입구 경로·다중 좌석 표기·명단 오기 경고·
     조회 실패 메시지·0매 인원·중복 좌석 차단 팝업 — 파싱 순서 프리플라이트 + 총 8개 시나리오 48개 체크)
-   ※ 회차 변경(장충 8/27 등) 후 배포 전에 한 번 돌려보세요.
+   ※ 회차 변경 후 배포 전에 한 번 돌려보세요. (현재 시나리오: 8/27 장충체육관 도면 기준)
    ============================================================ */
 const fs = require('fs');
 const path = require('path');
@@ -164,60 +164,71 @@ async function runCase(label, name, phone, person, checks, opts) {
 
   fails += await parseOrderPreflight();
 
-  // 케이스 1: 정상 단일 티켓 (203구역 2열 3번 — 양식 예시 좌석)
-  fails += await runCase('정상 단일 · 203구역 2열 3번', '테스트일', '010-0000-1111',
-    { n: '테스트일', c: 'TESTCODE1', t: [{ z: '203구역', s: '2열 3번' }] }, [
+  // 케이스 1: 정상 단일 티켓 (장충 G2구역 1열 3번)
+  fails += await runCase('정상 단일 · G2구역 1열 3번', '테스트일', '010-0000-1111',
+    { n: '테스트일', c: 'TESTCODE1', t: [{ z: 'G2구역', s: '1열 3번' }] }, [
     ['제출 시 관람 동의 팝업 표시', c => c.agrShown],
     ['확인하였습니다 → 팝업 닫히고 조회 진행', c => !c.doc.querySelector('#agrOverlay').classList.contains('show')],
     ['티켓 1매 렌더', c => c.ticketCount === 1],
     ['좌석 안내 표시됨', c => c.guideShown],
     ['미니맵 SVG 존재', c => c.guideHTML.includes('<svg')],
-    ['203구역 하이라이트', c => c.guideHTML.includes('data-zone="203"') && c.guideHTML.includes('class="sg-zone hl"')],
-    ['경로: 2번 출입구(202·203 구역 사이)', c => c.guideHTML.includes('2번 출입구</b>(202·203 구역 사이)로 진입')],
+    ['G2구역 하이라이트', c => c.guideHTML.includes('data-zone="G2"') && c.guideHTML.includes('class="sg-zone hl"')],
+    ['경로: GATE 4(2층 스탠드 출입구) → G2구역', c => c.guideHTML.includes('GATE 4</b>(2층 스탠드 출입구)로 진입') && c.guideHTML.includes('→ G2구역')],
     ['내 좌석 점(sg-dot-mine)', c => c.guideHTML.includes('sg-dot-mine')],
     ['상세: 10열이 1열보다 위(도면 방향)', c => c.guideHTML.indexOf('>10열<') < c.guideHTML.indexOf('>1열<')],
     ['상세: 코트 ▼ 아래', c => c.guideHTML.indexOf('sg-gridwrap') < c.guideHTML.indexOf('▼ 무대 · 코트 방향 ▼')],
     ['mine 셀에 좌석번호 3', c => /class="sg-seat mine">3</.test(c.guideHTML)],
     ['오기 경고 없음', c => !c.guideHTML.includes('sg-warn')],
-    ['가~라 배지 없음', c => !c.guideHTML.includes('>가<') && !c.guideHTML.includes('sg-gate')],
-    ['번호 게이트 1~10 표시', c => c.guideHTML.includes('>1<') && c.guideHTML.includes('>10<')],
+    ['게이트 표찰 GATE 1~8 표시', c => c.guideHTML.includes('GATE 1</text>') && c.guideHTML.includes('GATE 8</text>')],
   ]);
 
-  // 케이스 2: 아래쪽 구역 + 다중 표기 (215구역 3열 5·6번)
-  fails += await runCase('아래쪽 구역 · 215구역 3열 5·6번(가운뎃점)', '테스트이', '010-0000-2222',
-    { n: '테스트이', c: 'TESTCODE2', t: [{ z: '2층 215구역', s: '3열 5·6번' }] }, [
+  // 케이스 2: 아래쪽 구역(FU) + "2층 A구역" 표기 + 가운뎃점 다중 좌석
+  fails += await runCase('아래쪽 구역 · 2층 A구역 3열 31·32번', '테스트이', '010-0000-2222',
+    { n: '테스트이', c: 'TESTCODE2', t: [{ z: '2층 A구역', s: '3열 31·32번' }] }, [
     ['좌석 안내 표시됨', c => c.guideShown],
-    ['215 하이라이트', c => c.guideHTML.includes('data-zone="215"') && c.guideHTML.includes('sg-zone hl')],
-    ['경로: 9번 출입구(215·216 구역 사이)', c => c.guideHTML.includes('9번 출입구</b>(215·216 구역 사이)')],
+    ['A2 하이라이트', c => c.guideHTML.includes('data-zone="A2"') && c.guideHTML.includes('sg-zone hl')],
+    ['경로: GATE 1(2층 스탠드 출입구) → A2구역', c => c.guideHTML.includes('GATE 1</b>(2층 스탠드 출입구)로 진입') && c.guideHTML.includes('→ A2구역')],
     ['FU: 1열이 10열보다 위', c => c.guideHTML.indexOf('>1열<') < c.guideHTML.indexOf('>10열<')],
     ['FU: 코트 ▲ 위', c => c.guideHTML.indexOf('▲ 무대 · 코트 방향 ▲') < c.guideHTML.indexOf('sg-gridwrap')],
-    ['mine 2석(5·6번) 모두 표시', c => (c.guideHTML.match(/sg-seat mine/g) || []).length === 2],
-    ['방향 문구: 왼쪽 10번 → 오른쪽 1번', c => /왼쪽 <b>10번<\/b> → 오른쪽 <b>1번<\/b>/.test(c.guideHTML)],
+    ['mine 2석(31·32번) 모두 표시', c => (c.guideHTML.match(/sg-seat mine/g) || []).length === 2],
+    ['방향 문구: 왼쪽 46번 → 오른쪽 31번', c => /왼쪽 <b>46번<\/b> → 오른쪽 <b>31번<\/b>/.test(c.guideHTML)],
   ]);
 
-  // 케이스 3: 명단 오기 (202구역 1열 15번 — 실제로는 10번까지)
-  fails += await runCase('명단 오기 · 202구역 1열 15번', '테스트삼', '010-0000-3333',
-    { n: '테스트삼', c: 'TESTCODE3', t: [{ z: '202구역', s: '1열 15번' }] }, [
+  // 케이스 3: 명단 오기 (G2구역 1열 200번 — 실제 최대 187번)
+  fails += await runCase('명단 오기 · G2구역 1열 200번', '테스트삼', '010-0000-3333',
+    { n: '테스트삼', c: 'TESTCODE3', t: [{ z: 'G2구역', s: '1열 200번' }] }, [
     ['좌석 안내 표시됨', c => c.guideShown],
     ['오기 경고 표시', c => c.guideHTML.includes('sg-warn') && c.guideHTML.includes('찾지 못했습니다')],
     ['구역은 하이라이트 유지', c => c.guideHTML.includes('sg-zone hl')],
   ]);
 
-  // 케이스 4: 일행 3매 · 두 구역 (대표 조회)
-  fails += await runCase('일행 3매 · 202+204', '테스트사', '010-0000-4444',
+  // 케이스 4: 일행 3매 · 두 구역 (대표 조회) + 등급명 표기
+  fails += await runCase('일행 3매 · G2+H2', '테스트사', '010-0000-4444',
     { n: '테스트사', c: 'TESTCODE4', t: [
-      { z: '202구역', s: '5열 6번' }, { z: '202구역', s: '5열 7번' }, { z: '204구역', s: '2열 3번', b: '동반인' },
+      { z: 'G2구역', s: '5열 98번' }, { z: 'G2구역', s: '5열 99번' }, { z: 'H2구역', s: '2열 16번', b: '동반인' },
     ] }, [
     ['티켓 3매 렌더', c => c.ticketCount === 3],
     ['두 구역 모두 상세 생성', c => (c.guideHTML.match(/sg-detail/g) || []).length === 2],
-    ['202 mine 2석', c => { const d = c.guideHTML.split('sg-detail'); return (d[1].match(/sg-seat mine/g) || []).length === 2; }],
-    ['204 경로: 3번 출입구(204·205 구역 사이)', c => c.guideHTML.includes('3번 출입구</b>(204·205 구역 사이)')],
-    ['204 해피존 메모 표시', c => c.guideHTML.includes('해피존')],
+    ['G2 mine 2석', c => { const d = c.guideHTML.split('sg-detail'); return (d[1].match(/sg-seat mine/g) || []).length === 2; }],
+    ['H2 경로: GATE 4 → H2구역', c => c.guideHTML.includes('→ H2구역')],
+    ['등급명(2층석) 표기', c => c.guideHTML.includes('2층석')],
+  ]);
+
+  // 케이스 4b: 이번 수정 회귀 — R1 17번(엑셀 오기 정정) + "번" 없는 좌석 표기
+  fails += await runCase('수정 회귀 · R1 17번 + 번 없는 표기(B2 98)', '테스트오', '010-0000-5555',
+    { n: '테스트오', c: 'TESTCODE5', t: [
+      { z: 'R1구역', s: '17번' }, { z: 'B2구역', s: '98' },
+    ] }, [
+    ['두 구역 모두 상세 생성', c => (c.guideHTML.match(/sg-detail/g) || []).length === 2],
+    ['R1 17번 좌석 표시', c => /class="sg-seat mine">17</.test(c.guideHTML)],
+    ['B2 98(번 표기 없음) 좌석 표시', c => /class="sg-seat mine">98</.test(c.guideHTML)],
+    ['1층 동선 문구(현장 스태프 안내)', c => c.guideHTML.includes('현장 스태프 안내에 따라 R1구역')],
+    ['오기 경고 없음', c => !c.guideHTML.includes('sg-warn')],
   ]);
 
   // 케이스 5: 명단에 없는 사람 — DB에 없는 ID 조회 (박스는 '아무개' 명의로만 존재)
   fails += await runCase('명단에 없는 사람', '없는사람', '010-9999-9999',
-    { n: '아무개', c: 'X', t: [{ z: '203구역', s: '2열 3번' }] }, [
+    { n: '아무개', c: 'X', t: [{ z: 'G2구역', s: '1열 3번' }] }, [
     ['안내 메시지 표시', c => c.msg.includes('일치하는 티켓이 없습니다')],
     ['좌석 안내 숨김', c => !c.guideShown],
     ['티켓 미렌더', c => c.ticketCount === 0],
@@ -233,9 +244,9 @@ async function runCase(label, name, phone, person, checks, opts) {
 
   // 케이스 7: 중복 좌석 — 다른 화면에서 이미 입장된 좌석에 입장 시도 → 차단 팝업(확인 눌러도 유지)
   fails += await runCase('중복 좌석 차단 팝업', '테스트칠', '010-0000-7777',
-    { n: '테스트칠', c: 'TESTCODE7', t: [{ z: '203구역', s: '2열 3번' }] }, [
+    { n: '테스트칠', c: 'TESTCODE7', t: [{ z: 'G2구역', s: '1열 3번' }] }, [
     ['차단 팝업 표시', c => c.doc.querySelector('#dupOverlay').classList.contains('show')],
-    ['팝업에 좌석 표기', c => c.doc.querySelector('#dupSeat').textContent.includes('203구역')],
+    ['팝업에 좌석 표기', c => c.doc.querySelector('#dupSeat').textContent.includes('G2구역')],
     ['팝업에 최초 입장시각(19:42 KST)', c => c.doc.querySelector('#dupTs').textContent.includes('19:42')],
     ['확인 눌러도 닫히지 않음', c => c.doc.querySelector('#dupOverlay').classList.contains('show')],
     ['확인 버튼이 차단 문구로 전환', c => c.doc.querySelector('#dupBtn').textContent.includes('닫을 수 없습니다')],
@@ -248,7 +259,7 @@ async function runCase(label, name, phone, person, checks, opts) {
 
   // 케이스 8: 정상 선착 입장 → 팝업 없이 입장 완료
   fails += await runCase('정상 선착 입장', '테스트팔', '010-0000-8888',
-    { n: '테스트팔', c: 'TESTCODE8', t: [{ z: '215구역', s: '3열 5번' }] }, [
+    { n: '테스트팔', c: 'TESTCODE8', t: [{ z: 'A2구역', s: '3열 31번' }] }, [
     ['팝업 없음', c => !c.doc.querySelector('#dupOverlay').classList.contains('show')],
     ['입장 완료 상태', c => {
       const art = c.doc.querySelector('#tickets .ticket');
