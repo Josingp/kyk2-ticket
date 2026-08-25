@@ -339,11 +339,6 @@ table.roster{border-collapse:collapse;width:100%;min-width:560px}
   cursor:pointer;background:var(--navy);color:#fff}
 .t-sharebtns .t-shdel{flex:0 0 auto;background:none;color:#ffd9c4;text-decoration:underline;padding:10px 4px}
 .t-sharemsg{margin-top:8px;font:600 11.5px var(--body);color:#ffe1cf;line-height:1.5}
-/* 1매 초대자: 선물 버튼 대신 양도 불가 안내 */
-.t-noshare{margin-top:10px;border-radius:12px;padding:12px 13px;background:rgba(255,255,255,.92);
-  color:var(--navy);text-align:center;word-break:keep-all}
-.t-noshare b{display:block;font:800 13.5px var(--body);letter-spacing:-.01em}
-.t-noshare small{display:block;margin-top:4px;font:600 11.5px var(--body);color:#4d4a66;line-height:1.5}
 
 /* 입장 완료(비활성) 티켓 */
 .ticket.used{background:#8f8d9e}
@@ -540,6 +535,16 @@ footer{margin-top:34px;text-align:center;color:#7672ab;font-size:11.5px;line-hei
     <div class="err" id="err"></div>
     <div class="warn" id="warn"></div>
     <div class="done" id="done"></div>
+    <div class="desc" style="margin-top:16px;padding-top:12px;border-top:1px dashed rgba(255,255,255,.14)">
+      <b>비표 대상자 명단(선택)</b> — 열 이름: <code>비표대상</code> <code>방문자명</code> <code>연락처</code> <code>인원</code> <code>구역</code> <code>좌석번호</code><br>
+      <code>비표대상</code> 열에 <b>O</b>가 표시된 행만 대상으로 처리하고 빈칸 행은 무시합니다.<br>
+      대상자가 티켓을 확인하면 촬영 안내 확인 후 <b>“씨유 앞 인포데스크에서 비표 수령 → VIP입구 입장”</b> 팝업이 한 번 더 뜹니다.
+      명단 업로드 전·후 아무 때나 올릴 수 있습니다 · 양식: <a href="tools/비표_양식.xlsx" download>비표_양식.xlsx</a></div>
+    <label class="drop" id="dropBdg" style="padding:16px;font-size:13px">
+      비표 대상자 엑셀(.xlsx)을 여기로 드래그하거나 클릭해서 선택
+      <input type="file" id="fileBdg" accept=".xlsx,.xls">
+    </label>
+    <div class="stat" id="bdgStat" style="display:none"></div>
     <div class="btns" id="btns">
       <button id="dlDb" type="button">db.json 내려받기 (백업)</button>
       <button id="dlStaff" type="button">스태프 확인용 명단(.xlsx) 내려받기</button>
@@ -782,10 +787,6 @@ function render(person){
       '</div>' +
       '<div class="t-checkmsg"></div>' +
       (isSharedView ? '' :
-       person.t.length === 1 ?
-        /* 1매 초대자: 선물(양도) 기능 없음 — 본인 외 사용 불가 안내만 표시 (서버 /api/share 도 동일하게 차단) */
-        '<div class="t-noshare"><b>🔒 본인 외 사용 불가</b>' +
-        '<small>1매 초대 티켓은 양도할 수 없습니다.<br>초대받은 본인만 입장할 수 있습니다.</small></div>' :
         '<div class="t-share"><button class="t-sharebtn" type="button">🎁 이 좌석만 일행에게 보내기</button>' +
         '<div class="t-sharebox">' +
           '<input class="t-shareurl" readonly>' +
@@ -808,6 +809,17 @@ function render(person){
   renderMultiShare(person);
   buildSeatGuide(person);
   window.scrollTo({ top: 0 });
+  maybeBadgePopup(person);
+}
+/* 비표 대상자 안내 — 촬영 안내(동의) 확인 → 티켓 표시 직후 한 번 */
+var bdgShown = false;
+function maybeBadgePopup(person){
+  if (!person || !person.bd || bdgShown) return;
+  bdgShown = true;
+  var o = document.getElementById('bdgOverlay'); if (!o) return;
+  var who = document.getElementById('bdgWho');
+  who.textContent = esc(person.n) + ' · 비표 ' + (person.bd.n || 1) + '매';
+  o.classList.add('show');
 }
 
 /* 조회 */
@@ -825,6 +837,11 @@ document.addEventListener('click', function(e){
     return;
   }
   if (t && t.id === 'agrOverlay') t.classList.remove('show');   /* 바깥 탭 = 동의하지 않고 닫기 */
+  if (t && t.id === 'bdgBtn'){
+    var bo = document.getElementById('bdgOverlay');
+    if (bo) bo.classList.remove('show');
+    return;
+  }
 });
 
 $('#form').addEventListener('submit', function(ev){
@@ -1899,12 +1916,10 @@ $('#multiShare').addEventListener('click', function(ev){
   }).catch(function(e){
     var why = e.code === 'expired'
       ? '<b>만료된 티켓입니다.</b><br>공유 링크는 행사 종료 시각까지만 유효합니다. 초대자에게 새 링크를 다시 요청하세요.'
-      : e.code === 'not_transferable'
-      ? '<b>본인 외 사용 불가 티켓입니다.</b><br>1매 초대 티켓은 다른 사람에게 양도할 수 없습니다. 초대받은 본인이 이름과 연락처로 직접 티켓을 열어 입장해 주세요.'
       : (e.status === 404
         ? '링크가 삭제되었거나 좌석 정보가 변경되었습니다. 보내주신 분께 링크를 다시 요청해 주세요.'
         : esc(apiErrMsg(e)));
-    $('#lookup').innerHTML = '<h2>' + (e.code === 'expired' ? '만료된 공유 링크' : e.code === 'not_transferable' ? '양도할 수 없는 티켓' : '공유 링크를 열 수 없습니다') + '</h2>' +
+    $('#lookup').innerHTML = '<h2>' + (e.code === 'expired' ? '만료된 공유 링크' : '공유 링크를 열 수 없습니다') + '</h2>' +
       '<p class="desc">' + why + '</p>' +
       '<button class="primary" type="button" onclick="location.href=location.pathname">처음 화면으로</button>';
   });
@@ -2077,7 +2092,6 @@ function apiAdmin(payload){
   });
 }
 function apiErrMsg(e){
-  if (e && e.code === 'not_transferable') return '1매 초대 티켓은 양도할 수 없습니다. 초대받은 본인만 사용할 수 있습니다.';
   if (e && e.code === 'redis_env_missing') return '서버 저장소(Upstash)가 아직 연결되지 않았습니다. Vercel 환경변수를 설정해 주세요. (README 참고)';
   if (e && e.status === 429) return '시도가 너무 많습니다. 10분 뒤 다시 시도해 주세요.';
   if (e && e.status === 401) return '비밀번호가 올바르지 않습니다. 로그아웃 후 다시 로그인해 주세요.';
@@ -2155,6 +2169,111 @@ $('#file').addEventListener('change', function(e){
   e.target.value = '';
 });
 
+/* ---------- 비표 대상자 명단 ---------- */
+var BADGES = null;                          /* [{tag,name,phone,n,zone,seat,key}] */
+var dropBdg = $('#dropBdg');
+['dragover','dragenter'].forEach(function(ev){
+  dropBdg.addEventListener(ev, function(e){ e.preventDefault(); dropBdg.classList.add('hover'); });
+});
+['dragleave','drop'].forEach(function(ev){
+  dropBdg.addEventListener(ev, function(e){ e.preventDefault(); dropBdg.classList.remove('hover'); });
+});
+dropBdg.addEventListener('drop', function(e){
+  var f = e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) handleBadgeFile(f);
+});
+$('#fileBdg').addEventListener('change', function(e){
+  if (e.target.files[0]) handleBadgeFile(e.target.files[0]);
+  e.target.value = '';
+});
+function bdgStat(msg, isErr){
+  var el = $('#bdgStat'); el.style.display = 'block'; el.textContent = msg;
+  el.style.color = isErr ? '#ff9d9d' : '';
+}
+function parseBadgeSheet(wb){
+  var ws = wb.Sheets[wb.SheetNames[0]];
+  var aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+  var hi = -1, cols = {};
+  for (var r = 0; r < Math.min(aoa.length, 6); r++) {
+    var row = aoa[r].map(function(c){ return String(c).trim(); }), m = {};
+    row.forEach(function(c, idx){
+      if (/비표/.test(c)) m.tag = idx;
+      else if (/방문자|이름|성명|대분류/.test(c)) m.name = idx;
+      else if (/연락처|전화|휴대폰|핸드폰/.test(c)) m.phone = idx;
+      else if (/인\s*원/.test(c)) m.n = idx;
+      else if (/구역/.test(c)) m.zone = idx;
+      else if (/좌석/.test(c)) m.seat = idx;
+    });
+    if (m.name != null && m.phone != null) { hi = r; cols = m; break; }
+  }
+  if (hi < 0) throw new Error('비표 명단의 제목 행을 찾지 못했습니다. "방문자명, 연락처" 열이 있어야 합니다.');
+  var rows = [], skipped = 0;
+  for (var i = hi + 1; i < aoa.length; i++) {
+    var a = aoa[i];
+    var name = String(cols.name != null ? a[cols.name] : '').trim();
+    if (!name) continue;
+    if (cols.tag != null){                      /* 비표대상 열: O 표시 행만 대상, 빈칸은 무시 */
+      var tg = String(a[cols.tag] == null ? '' : a[cols.tag]).trim().toUpperCase();
+      var isTarget = tg === 'O' || tg === 'ㅇ' || tg === '0' || tg === 'Y' || tg === 'YES' ||
+                     tg === 'V' || tg === '√' || tg === '1' || tg === 'TRUE' || tg === '예' || tg === '대상';
+      if (!isTarget){ skipped++; continue; }
+    }
+    var phone = String(cols.phone != null ? a[cols.phone] : '').trim();
+    rows.push({
+      name: name, phone: phone,
+      n: parseInt(String(cols.n != null ? a[cols.n] : '').replace(/\D/g, ''), 10) || 1,
+      zone: String(cols.zone != null ? a[cols.zone] : '').trim(),
+      seat: String(cols.seat != null ? a[cols.seat] : '').trim(),
+      key: T.normName(name) + '|' + T.last4(phone)
+    });
+  }
+  rows.skipped = skipped;
+  return rows;
+}
+/* people 배열에 bd 필드 부여/해제. BADGES 없으면 손대지 않음 */
+function applyBadges(people){
+  if (!BADGES) return null;
+  var by = new Map(); BADGES.forEach(function(b){ by.set(b.key, b); });
+  var used = new Set(), matched = 0;
+  people.forEach(function(pp){
+    var k = T.normName(pp.n) + '|' + T.last4(pp.p);
+    var b = by.get(k);
+    if (b){
+      pp.bd = { n: b.n || 1 };
+      used.add(k); matched++;
+    } else if (pp.bd) delete pp.bd;
+  });
+  return { matched: matched, miss: BADGES.filter(function(b){ return !used.has(b.key); }) };
+}
+async function handleBadgeFile(f){
+  try { await loadXLSX(); }
+  catch(e){ return bdgStat('엑셀 처리 라이브러리를 불러오지 못했습니다. 네트워크를 확인해 주세요.', true); }
+  var rows;
+  try { rows = parseBadgeSheet(XLSX.read(await f.arrayBuffer(), { type: 'array' })); }
+  catch(e){ return bdgStat(e.message || '비표 엑셀을 해석하지 못했습니다.', true); }
+  if (!rows.length) return bdgStat('비표 명단에 O로 표시된 대상 행이 없습니다.', true);
+  BADGES = rows;
+  var skipNote = rows.skipped ? ' (빈칸 ' + rows.skipped + '행 제외)' : '';
+  if (serverPeople && serverPeople.length){
+    var ppl = JSON.parse(JSON.stringify(serverPeople));
+    var m = applyBadges(ppl);
+    bdgStat('비표 대상 ' + rows.length + '명' + skipNote + ' — 서버 반영 중…');
+    try {
+      var sum = await applyIncremental(ppl, function(dn, tt){ bdgStat('비표 반영 암호화 중… ' + dn + ' / ' + tt + '명'); });
+      DB = sum.db; serverPeople = ppl;
+      if (dbBlobURL) URL.revokeObjectURL(dbBlobURL);
+      dbBlobURL = URL.createObjectURL(new Blob([JSON.stringify(sum.db, null, 1)], { type: 'application/json' }));
+      if (window.XLSX && XLSX.utils && XLSX.utils.aoa_to_sheet) staffBook = makeStaffBook(ppl);
+      $('#btns').style.display = 'flex';
+      bdgStat('✔ 비표 대상 ' + rows.length + '명 중 ' + m.matched + '명이 초대 명단과 매칭 — 서버 반영 완료'
+        + (m.miss.length ? ' · 미매칭 ' + m.miss.length + '명: ' + m.miss.map(function(b){ return b.name; }).join(', ') : ''));
+      if ($('#rosterBox').style.display !== 'none') renderRoster();
+    } catch(e){ bdgStat('서버 반영 실패: ' + apiErrMsg(e) + ' — 같은 파일을 다시 올려 주세요.', true); }
+  } else {
+    bdgStat('비표 대상 ' + rows.length + '명 준비됨' + skipNote + ' — 초대 명단 엑셀을 올리면 함께 반영됩니다.');
+  }
+}
+
 function resetAdmin(){
   ['err','warn','done'].forEach(function(id){ var el = $('#'+id); el.style.display = 'none'; el.textContent = ''; });
   $('#btns').style.display = 'none';
@@ -2213,9 +2332,9 @@ async function buildDB(people, onProg){
     await Promise.all(slice.map(async function(g){
       if (!g.c) g.c = T.makeCode(8);
       var rec = await T.deriveRecord(g.n, g.p, CFG);
-      db.records[rec.id] = await T.encryptJSON(rec.key, { n: g.n, c: g.c, t: g.t });
+      db.records[rec.id] = await T.encryptJSON(rec.key, g.bd ? { n: g.n, c: g.c, t: g.t, bd: g.bd } : { n: g.n, c: g.c, t: g.t });
       var ver = await T.deriveVerify(g.c, CFG);
-      db.verify[ver.id] = await T.encryptJSON(ver.key, { n: g.n, t: g.t });
+      db.verify[ver.id] = await T.encryptJSON(ver.key, g.bd ? { n: g.n, t: g.t, bd: g.bd } : { n: g.n, t: g.t });
       doneN++;
       if (onProg) onProg(doneN, total);
     }));
@@ -2225,12 +2344,13 @@ async function buildDB(people, onProg){
 function makeStaffBook(people){
   var rows = [];
   people.forEach(function(g){
-    g.t.forEach(function(tk){ rows.push([g.n, tk.b || '', g.p, tk.z, tk.s, T.fmtCode(g.c), tk.g || '']); });
+    var bdTxt = g.bd ? ('O' + ((g.bd.n || 1) > 1 ? ' ' + g.bd.n + '매' : '')) : '';
+    g.t.forEach(function(tk){ rows.push([g.n, tk.b || '', g.p, tk.z, tk.s, T.fmtCode(g.c), tk.g || '', bdTxt]); });
   });
   rows.sort(function(a, b){ return (a[3]+a[4]).localeCompare(b[3]+b[4], 'ko'); });
-  var aoa = [['대분류','소분류','연락처','구역','좌석','확인코드','등급']].concat(rows);
+  var aoa = [['대분류','소분류','연락처','구역','좌석','확인코드','등급','비표']].concat(rows);
   var ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = [{wch:12},{wch:12},{wch:16},{wch:10},{wch:14},{wch:13},{wch:10}];
+  ws['!cols'] = [{wch:12},{wch:12},{wch:16},{wch:10},{wch:14},{wch:13},{wch:10},{wch:12}];
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '입장확인');
   return wb;
@@ -2274,7 +2394,8 @@ async function applyIncremental(newPeople, prog, isRetry){
     var op = oldByKey.get(k);
     if (!op){ added++; toBuild.push(np); return; }
     np.c = op.c;   /* 확인코드 유지 */
-    if (op.n !== np.n || tixCanon(op.t) !== tixCanon(np.t)){ changed++; toBuild.push(np); }
+    if (op.n !== np.n || tixCanon(op.t) !== tixCanon(np.t)
+        || JSON.stringify(op.bd || null) !== JSON.stringify(np.bd || null)){ changed++; toBuild.push(np); }
     else {
       kept++;
       if (maskPhone(op.p) !== maskPhone(np.p)) rosterOnly++;
@@ -2371,8 +2492,10 @@ async function handleFileInner(f){
   $('#stat').style.display = 'block';
   $('#stat').textContent = '서버 명단과 비교하는 중…';
   var people = Array.from(groups.values()).map(function(g){ return { n: g.n, p: g.p, t: g.t }; });
+  var bm = applyBadges(people);
 
   var warnMsgs = [];
+  if (bm && bm.miss.length) warnMsgs.push('⚠ 비표 명단 미매칭 ' + bm.miss.length + '명(초대 명단에 없음): ' + bm.miss.map(function(b){ return b.name; }).join(', '));
   if (collisions.length) warnMsgs.push('⚠ 이름+뒤4자리 중복:\n- ' + collisions.join('\n- '));
   if (parsed.problems.length) warnMsgs.push('⚠ 건너뛴 행:\n- ' + parsed.problems.join('\n- '));
   if (warnMsgs.length) { var w = $('#warn'); w.textContent = warnMsgs.join('\n\n'); w.style.display = 'block'; }
@@ -2392,7 +2515,8 @@ async function handleFileInner(f){
     $('#barIn').style.width = '100%';
     d.innerHTML = '✔ <b>' + people.length + '명 · 티켓 ' + rows.length + '매</b> — 서버에 적용 완료, 즉시 반영됩니다.<br>'
       + '변경 반영: 추가 ' + sum.added + ' · 수정 ' + sum.changed + ' · 삭제 ' + sum.removed + ' · 유지 ' + sum.kept + '명'
-      + (sum.kept ? ' (유지 인원의 확인코드·공유 링크는 그대로)' : '');
+      + (sum.kept ? ' (유지 인원의 확인코드·공유 링크는 그대로)' : '')
+      + (bm ? '<br>비표 대상 ' + BADGES.length + '명 중 <b>' + bm.matched + '명</b> 티켓에 반영' : '');
     d.style.display = 'block';
     $('#stat').textContent = '적용 완료 · ' + new Date().toLocaleTimeString('ko-KR');
     if ($('#rosterBox').style.display !== 'none') renderRoster();
@@ -2769,6 +2893,15 @@ $('#btnRosterStaff').addEventListener('click', function(){
        본 티켓으로는 입장할 수 없습니다.<br>
        이 화면을 그대로 게이트 스태프에게 보여주세요.</p>
     <button type="button" id="dupBtn">확인</button>
+  </div>
+</div>
+<div class="dupOverlay" id="bdgOverlay" role="alertdialog" aria-modal="true" aria-labelledby="bdgTitle">
+  <div class="dupBox" style="border-color:#B08A2E">
+    <div class="dupBig">🎫</div>
+    <h2 id="bdgTitle" style="color:#F2C744">비표대상자입니다</h2>
+    <div class="dupSeat" id="bdgWho" style="color:#F2C744;border-color:rgba(242,199,68,.45);background:rgba(242,199,68,.08)"></div>
+    <p><b>씨유(CU) 앞 인포데스크</b>에서 비표를 받으신 뒤<br><b>VIP입구</b>로 입장해 주세요.</p>
+    <button type="button" id="bdgBtn" style="background:#B08A2E;color:#170F02">확인했습니다</button>
   </div>
 </div>
 </body>

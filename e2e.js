@@ -267,7 +267,26 @@ async function runCase(label, name, phone, person, checks, opts) {
              art.querySelector('.t-state').textContent.includes('입장 완료');
     }],
     ['도장 문구 = 입장 완료', c => c.doc.querySelector('.t-stamp span').textContent.includes('입장 완료')],
+    ['비표 팝업 없음(일반 인원)', c => !c.doc.querySelector('#bdgOverlay').classList.contains('show')],
   ], { clickCheckin: true });
+
+  // 케이스 9: 비표 대상자 — 동의 팝업 확인 → 티켓 표시 직후 비표 안내 팝업
+  fails += await runCase('비표 대상자 안내 팝업', '테스트구', '010-0000-9999',
+    { n: '테스트구', c: 'TESTCODE9', t: [{ z: 'R1구역', s: '1번' }], bd: { n: 3 } }, [
+    ['동의(촬영 안내) 팝업이 먼저 떴음', c => c.agrShown],
+    ['비표 팝업 표시', c => c.doc.querySelector('#bdgOverlay').classList.contains('show')],
+    ['제목 = 비표대상자입니다', c => c.doc.querySelector('#bdgTitle').textContent.includes('비표대상자입니다')],
+    ['안내 문구(인포데스크·VIP입구)', c => {
+      const t = c.doc.querySelector('#bdgOverlay').textContent;
+      return t.includes('인포데스크') && t.includes('VIP입구');
+    }],
+    ['대상 정보(이름·매수)', c => {
+      const t = c.doc.querySelector('#bdgWho').textContent;
+      return t.includes('테스트구') && t.includes('3매');
+    }],
+    ['확인 누르면 닫힘', c => { c.doc.querySelector('#bdgBtn').click(); return !c.doc.querySelector('#bdgOverlay').classList.contains('show'); }],
+    ['티켓은 정상 렌더', c => c.ticketCount === 1],
+  ]);
 
   console.log('\n총 실패:', fails);
   process.exit(fails ? 1 : 0);
