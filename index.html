@@ -525,7 +525,7 @@ footer{margin-top:34px;text-align:center;color:#7672ab;font-size:11.5px;line-hei
     명단 원본은 서버 저장소(Upstash)에만 보관되고, 공개 DB에는 암호문만 올라갑니다.</p>
     <p class="desc" style="margin-top:8px">열 이름: <code>대분류</code> <code>소분류</code>(동반인·선택) <code>연락처</code> <code>구역</code> <code>좌석</code> (선택: <code>등급</code> <code>비표대상</code> <code>인원</code>)
     · 조회는 대분류+연락처 뒤 4자리로 하며, 소분류가 있으면 티켓에 <b>대분류 (소분류)</b>로 표기됩니다
-    · 같은 사람의 좌석이 여러 개면 행을 여러 줄로
+    · 같은 사람의 좌석이 여러 개면 행을 여러 줄로 · <code>대분류</code>가 비어 있으면 <code>소분류</code>를 이름으로 사용합니다
     · <code>비표대상</code>에 <b>O</b>를 표시하면 그 사람이 티켓을 확인할 때 촬영 안내 확인 후 <b>“씨유 앞 인포데스크에서 비표 수령 → VIP입구 입장”</b> 팝업이 한 번 더 뜹니다 (<code>인원</code> = 비표 매수, 빈칸이면 1) · 양식: <a href="tools/명단_양식.xlsx" download>명단_양식.xlsx</a></p>
     <label class="drop" id="drop">
       명단 엑셀(.xlsx)을 여기로 드래그하거나<br>클릭해서 선택
@@ -2196,12 +2196,13 @@ function parseSheet(wb){
   for (var i = hi + 1; i < aoa.length; i++) {
     var a = aoa[i];
     var name = String(a[cols.name] == null ? '' : a[cols.name]).trim();
+    var sub = cols.sub != null ? String(a[cols.sub] == null ? '' : a[cols.sub]).trim() : '';
+    if (!name && sub){ name = sub; sub = ''; }   /* 대분류 빈칸 + 소분류만 있으면 소분류가 이름 */
     if (!name) continue;
     var phone = String(a[cols.phone] == null ? '' : a[cols.phone]).trim();
     var zone  = String(a[cols.zone] == null ? '' : a[cols.zone]).trim();
     var seat  = String(a[cols.seat] == null ? '' : a[cols.seat]).trim();
     var grade = cols.grade != null ? String(a[cols.grade] == null ? '' : a[cols.grade]).trim() : '';
-    var sub = cols.sub != null ? String(a[cols.sub] == null ? '' : a[cols.sub]).trim() : '';
     var bdg = false, bdgN = 0;
     if (cols.bdg != null){
       var tg = String(a[cols.bdg] == null ? '' : a[cols.bdg]).trim().toUpperCase();
