@@ -339,6 +339,11 @@ table.roster{border-collapse:collapse;width:100%;min-width:560px}
   cursor:pointer;background:var(--navy);color:#fff}
 .t-sharebtns .t-shdel{flex:0 0 auto;background:none;color:#ffd9c4;text-decoration:underline;padding:10px 4px}
 .t-sharemsg{margin-top:8px;font:600 11.5px var(--body);color:#ffe1cf;line-height:1.5}
+/* 1매 초대자: 선물 버튼 대신 양도 불가 안내 */
+.t-noshare{margin-top:10px;border-radius:12px;padding:12px 13px;background:rgba(255,255,255,.92);
+  color:var(--navy);text-align:center;word-break:keep-all}
+.t-noshare b{display:block;font:800 13.5px var(--body);letter-spacing:-.01em}
+.t-noshare small{display:block;margin-top:4px;font:600 11.5px var(--body);color:#4d4a66;line-height:1.5}
 
 /* 입장 완료(비활성) 티켓 */
 .ticket.used{background:#8f8d9e}
@@ -777,6 +782,10 @@ function render(person){
       '</div>' +
       '<div class="t-checkmsg"></div>' +
       (isSharedView ? '' :
+       person.t.length === 1 ?
+        /* 1매 초대자: 선물(양도) 기능 없음 — 본인 외 사용 불가 안내만 표시 (서버 /api/share 도 동일하게 차단) */
+        '<div class="t-noshare"><b>🔒 본인 외 사용 불가</b>' +
+        '<small>1매 초대 티켓은 양도할 수 없습니다.<br>초대받은 본인만 입장할 수 있습니다.</small></div>' :
         '<div class="t-share"><button class="t-sharebtn" type="button">🎁 이 좌석만 일행에게 보내기</button>' +
         '<div class="t-sharebox">' +
           '<input class="t-shareurl" readonly>' +
@@ -1890,10 +1899,12 @@ $('#multiShare').addEventListener('click', function(ev){
   }).catch(function(e){
     var why = e.code === 'expired'
       ? '<b>만료된 티켓입니다.</b><br>공유 링크는 행사 종료 시각까지만 유효합니다. 초대자에게 새 링크를 다시 요청하세요.'
+      : e.code === 'not_transferable'
+      ? '<b>본인 외 사용 불가 티켓입니다.</b><br>1매 초대 티켓은 다른 사람에게 양도할 수 없습니다. 초대받은 본인이 이름과 연락처로 직접 티켓을 열어 입장해 주세요.'
       : (e.status === 404
         ? '링크가 삭제되었거나 좌석 정보가 변경되었습니다. 보내주신 분께 링크를 다시 요청해 주세요.'
         : esc(apiErrMsg(e)));
-    $('#lookup').innerHTML = '<h2>' + (e.code === 'expired' ? '만료된 공유 링크' : '공유 링크를 열 수 없습니다') + '</h2>' +
+    $('#lookup').innerHTML = '<h2>' + (e.code === 'expired' ? '만료된 공유 링크' : e.code === 'not_transferable' ? '양도할 수 없는 티켓' : '공유 링크를 열 수 없습니다') + '</h2>' +
       '<p class="desc">' + why + '</p>' +
       '<button class="primary" type="button" onclick="location.href=location.pathname">처음 화면으로</button>';
   });
@@ -2066,6 +2077,7 @@ function apiAdmin(payload){
   });
 }
 function apiErrMsg(e){
+  if (e && e.code === 'not_transferable') return '1매 초대 티켓은 양도할 수 없습니다. 초대받은 본인만 사용할 수 있습니다.';
   if (e && e.code === 'redis_env_missing') return '서버 저장소(Upstash)가 아직 연결되지 않았습니다. Vercel 환경변수를 설정해 주세요. (README 참고)';
   if (e && e.status === 429) return '시도가 너무 많습니다. 10분 뒤 다시 시도해 주세요.';
   if (e && e.status === 401) return '비밀번호가 올바르지 않습니다. 로그아웃 후 다시 로그인해 주세요.';
