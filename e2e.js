@@ -288,6 +288,34 @@ async function runCase(label, name, phone, person, checks, opts) {
     ['티켓은 정상 렌더', c => c.ticketCount === 1],
   ]);
 
+  // 케이스 10: 양도 제한 — 1장 보유자는 공유 불가, C1/D1/F1 좌석 공유 불가
+  fails += await runCase('양도 제한(혼합 구역)', '테스트십', '010-0000-1010',
+    { n: '테스트십', c: 'TESTCODE10', t: [{ z: 'D1구역', s: '1열 1번' }, { z: 'I1구역', s: '3열 5번' }, { z: 'I1구역', s: '3열 6번' }] }, [
+    ['공유 버튼은 I1 두 장에만', c => c.doc.querySelectorAll('#tickets .t-sharebtn').length === 2],
+    ['D1 티켓엔 공유 버튼 없음', c => {
+      const arts = [...c.doc.querySelectorAll('#tickets .ticket')];
+      const d1 = arts.find(a => a.textContent.includes('D1'));
+      return d1 && !d1.querySelector('.t-sharebtn');
+    }],
+    ['묶음 보내기 = 양도 가능 2매만', c => {
+      const ms = c.doc.querySelector('#multiShare');
+      return ms.style.display !== 'none' && ms.querySelectorAll('.ms-list .ms-row').length === 2 &&
+             ms.textContent.includes('전체 선택') && ms.textContent.includes('(2매)');
+    }],
+  ]);
+
+  // 케이스 11: 1장 보유자·양도불가 구역 전용 — 공유 UI 전무
+  fails += await runCase('양도 불가(1장 보유)', '테스트열하나', '010-0000-1111',
+    { n: '테스트열하나', c: 'TESTCODE11', t: [{ z: 'A2구역', s: '2열 9번' }] }, [
+    ['한 장뿐이면 공유 버튼 없음', c => c.doc.querySelectorAll('#tickets .t-sharebtn').length === 0],
+    ['묶음 보내기 숨김', c => c.doc.querySelector('#multiShare').style.display === 'none'],
+  ]);
+  fails += await runCase('양도 불가(C1 두 장)', '테스트열둘', '010-0000-1212',
+    { n: '테스트열둘', c: 'TESTCODE12', t: [{ z: 'C1구역', s: '1열 1번' }, { z: 'C1구역', s: '1열 2번' }] }, [
+    ['C1 좌석엔 공유 버튼 없음', c => c.doc.querySelectorAll('#tickets .t-sharebtn').length === 0],
+    ['묶음 보내기 숨김', c => c.doc.querySelector('#multiShare').style.display === 'none'],
+  ]);
+
   console.log('\n총 실패:', fails);
   process.exit(fails ? 1 : 0);
 })();

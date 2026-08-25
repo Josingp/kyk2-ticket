@@ -777,7 +777,7 @@ function render(person){
         '<button class="t-staffbtn" type="button">입장 확인 (스태프)</button>' +
       '</div>' +
       '<div class="t-checkmsg"></div>' +
-      (isSharedView ? '' :
+      ((isSharedView || !canShareSeat(person, tk)) ? '' :
         '<div class="t-share"><button class="t-sharebtn" type="button">🎁 이 좌석만 일행에게 보내기</button>' +
         '<div class="t-sharebox">' +
           '<input class="t-shareurl" readonly>' +
@@ -1803,10 +1803,17 @@ function expText(exp){
 }
 
 /* ---- 여러 좌석 한 번에 보내기 ---- */
+/* 양도(공유) 가능 여부: 티켓이 1장뿐인 사람 전체 불가 · C1/D1/F1 구역 좌석 불가 */
+var NO_SHARE_ZONES = ['C1', 'D1', 'F1'];
+function zoneKeyOf(z){ return String(z || '').toUpperCase().replace(/\s|구역/g, ''); }
+function seatShareable(tk){ return NO_SHARE_ZONES.indexOf(zoneKeyOf(tk.z)) < 0; }
+function canShareSeat(person, tk){ return person.t.length > 1 && seatShareable(tk); }
 function renderMultiShare(person){
   var host = $('#multiShare');
-  if (isSharedView || !person || person.t.length < 2){ host.style.display = 'none'; host.innerHTML = ''; return; }
-  var rows = person.t.map(function(tk, i){
+  var okIdx = person ? person.t.map(function(tk, i){ return seatShareable(tk) ? i : -1; }).filter(function(i){ return i >= 0; }) : [];
+  if (isSharedView || !person || person.t.length < 2 || okIdx.length < 2){ host.style.display = 'none'; host.innerHTML = ''; return; }
+  var rows = okIdx.map(function(i){
+    var tk = person.t[i];
     var label = esc(String(tk.z).trim() + ' ' + String(tk.s).trim()) + (tk.b ? ' <b>(' + esc(tk.b) + ')</b>' : '');
     return '<label class="ms-row"><input type="checkbox" data-i="' + i + '"><span>' + label + '</span></label>';
   }).join('');
@@ -1816,7 +1823,7 @@ function renderMultiShare(person){
     '</button>' +
     '<div class="ms-body" id="msBody">' +
     '<p class="desc" style="margin-top:10px">보낼 좌석을 골라 링크 하나로 묶어 전달합니다. 받은 사람은 선택된 좌석 티켓만 보게 됩니다.</p>' +
-    '<label class="ms-row ms-all"><input type="checkbox" id="msAll"><span><b>전체 선택</b> (' + person.t.length + '매)</span></label>' +
+    '<label class="ms-row ms-all"><input type="checkbox" id="msAll"><span><b>전체 선택</b> (' + okIdx.length + '매)</span></label>' +
     '<div class="ms-list">' + rows + '</div>' +
     '<button class="primary" id="msMake" type="button" style="margin-top:12px">선택한 좌석 링크 만들기</button>' +
     '<div class="t-sharebox ms-box" id="msBox">' +
