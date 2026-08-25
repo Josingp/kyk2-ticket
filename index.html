@@ -408,6 +408,13 @@ footer{margin-top:34px;text-align:center;color:#7672ab;font-size:11.5px;line-hei
 .pp-sub{display:inline-block;margin-top:6px;font-size:12px;opacity:.65;font-weight:500}
 .pp-meta{display:flex;justify-content:center;align-items:center;gap:14px;flex-wrap:wrap;padding:0 14px 20px;font-size:12.5px;color:#fff}
 .pp-live b{font-variant-numeric:tabular-nums}
+.tablewrap{max-height:62vh;overflow:auto;border:1px solid rgba(255,255,255,.12);border-radius:10px}
+table.roster thead th{position:sticky;top:0;z-index:3;background:#1b2233;box-shadow:0 1px 0 rgba(255,255,255,.14)}
+table.roster tr.edited td:first-child{box-shadow:inset 3px 0 0 #F2C744}
+.rpager{display:flex;align-items:center;gap:10px;margin:8px 0 4px;font-size:12.5px}
+.rpager #rpInfo{min-width:130px;text-align:center;color:#cfd6e4;font-variant-numeric:tabular-nums}
+.rosterbar select,.rpager select{background:#141a29;color:#e7ecf5;border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:6px 8px;font-size:12.5px}
+#btnEditedOnly.on{border-color:#F2C744;color:#F2C744}
 </style>
 </head>
 <body>
@@ -615,7 +622,15 @@ footer{margin-top:34px;text-align:center;color:#7672ab;font-size:11.5px;line-hei
     <div id="rosterBox" style="display:none">
       <div class="rosterbar">
         <input id="rosterSearch" type="text" placeholder="이름 · 연락처 · 구역 검색">
+        <select id="rosterZone" title="구역 필터"><option value="">전체 구역</option></select>
+        <button class="ghost" id="btnEditedOnly" type="button">수정한 행만</button>
         <button class="ghost" id="btnRowAdd" type="button">＋ 행 추가</button>
+      </div>
+      <div class="rpager">
+        <button class="ghost" id="rpPrev" type="button">◀</button>
+        <span id="rpInfo">-</span>
+        <button class="ghost" id="rpNext" type="button">▶</button>
+        <select id="rpSize"><option value="100">100매씩</option><option value="200">200매씩</option><option value="0">전체 표시</option></select>
       </div>
       <div class="tablewrap">
         <table class="roster">
@@ -2876,6 +2891,9 @@ function renderRoster(){
   });
   $('#rosterBox').style.display = 'block';
   $('#rosterSearch').value = '';
+  RP.page = 0; RP.editedOnly = false;
+  fillZoneFilter();
+  applyRosterView();
   rosterCount();
 }
 function rosterCount(){
@@ -2904,20 +2922,73 @@ $('#btnRosterLoad').addEventListener('click', function(){
 
 $('#btnRowAdd').addEventListener('click', function(){
   var tr = rowEl(['', '', '', '', ''], null);
+  tr.classList.add('edited');
   $('#rosterBody').appendChild(tr);
+  applyRosterView(tr);
   tr.querySelector('input').focus();
   rosterCount();
 });
 
-$('#rosterSearch').addEventListener('input', function(){
-  var q = this.value.trim().toLowerCase();
-  var trs = $('#rosterBody').children;
-  for (var i = 0; i < trs.length; i++) {
-    var txt = '';
-    var ins = trs[i].querySelectorAll('input');
-    for (var k = 0; k < ins.length; k++) txt += ins[k].value + ' ';
-    trs[i].style.display = (!q || txt.toLowerCase().indexOf(q) !== -1) ? '' : 'none';
+/* ── 대형 명단 탐색: 페이지 · 구역 필터 · 수정한 행만 보기 (모든 행은 DOM에 유지되어 [적용]에 전부 반영) ── */
+var RP = { page: 0, size: 100, editedOnly: false };
+function rowText(tr){
+  var txt = '', ins = tr.querySelectorAll('input');
+  for (var k = 0; k < ins.length; k++) if (ins[k].type !== 'checkbox') txt += ins[k].value + ' ';
+  return txt.toLowerCase();
+}
+function applyRosterView(jumpTr){
+  var q = $('#rosterSearch').value.trim().toLowerCase();
+  var zone = $('#rosterZone').value.trim().toLowerCase();
+  var trs = Array.prototype.slice.call($('#rosterBody').children);
+  var vis = trs.filter(function(tr){
+    if (RP.editedOnly && !tr.classList.contains('edited')) return false;
+    if (zone){
+      var zin = tr.querySelector('input[data-k="z"]');
+      if (!zin || zin.value.trim().toLowerCase().indexOf(zone) < 0) return false;
+    }
+    return !q || rowText(tr).indexOf(q) >= 0;
+  });
+  var size = RP.size > 0 ? RP.size : (vis.length || 1);
+  var maxPage = Math.max(0, Math.ceil(vis.length / size) - 1);
+  if (jumpTr){ var ji = vis.indexOf(jumpTr); if (ji >= 0) RP.page = Math.floor(ji / size); }
+  if (RP.page > maxPage) RP.page = maxPage;
+  var from = RP.page * size, to = Math.min(vis.length, from + size);
+  trs.forEach(function(tr){ tr.style.display = 'none'; });
+  vis.slice(from, to).forEach(function(tr){ tr.style.display = ''; });
+  var edited = trs.filter(function(tr){ return tr.classList.contains('edited'); }).length;
+  $('#rpInfo').textContent = vis.length ? (from + 1) + '–' + to + ' / ' + vis.length + '매' : '표시할 행 없음';
+  $('#rpPrev').disabled = RP.page <= 0;
+  $('#rpNext').disabled = RP.page >= maxPage;
+  $('#btnEditedOnly').textContent = '수정한 행만' + (edited ? ' (' + edited + ')' : '');
+  $('#btnEditedOnly').classList.toggle('on', RP.editedOnly);
+}
+function fillZoneFilter(){
+  var sel = $('#rosterZone'), cur = sel.value;
+  var zs = {};
+  Array.prototype.forEach.call($('#rosterBody').children, function(tr){
+    var zin = tr.querySelector('input[data-k="z"]');
+    if (zin && zin.value.trim()) zs[zin.value.trim()] = 1;
+  });
+  sel.innerHTML = '<option value="">전체 구역</option>' +
+    Object.keys(zs).sort(function(a, b){ return a.localeCompare(b, 'ko'); })
+      .map(function(z){ return '<option' + (z === cur ? ' selected' : '') + '>' + z.replace(/</g, '&lt;') + '</option>'; }).join('');
+}
+$('#rosterSearch').addEventListener('input', function(){ RP.page = 0; applyRosterView(); });
+$('#rosterZone').addEventListener('change', function(){ RP.page = 0; applyRosterView(); });
+$('#rpPrev').addEventListener('click', function(){ if (RP.page > 0){ RP.page--; applyRosterView(); $('.tablewrap').scrollTop = 0; } });
+$('#rpNext').addEventListener('click', function(){ RP.page++; applyRosterView(); $('.tablewrap').scrollTop = 0; });
+$('#rpSize').addEventListener('change', function(){ RP.size = parseInt(this.value, 10) || 0; RP.page = 0; applyRosterView(); });
+$('#btnEditedOnly').addEventListener('click', function(){ RP.editedOnly = !RP.editedOnly; RP.page = 0; applyRosterView(); });
+$('#rosterBody').addEventListener('input', function(e){
+  var tr = e.target.closest('tr');
+  if (tr && !tr.classList.contains('edited')){ tr.classList.add('edited'); applyRosterView(); }
+});
+$('#rosterBody').addEventListener('change', function(e){
+  if (e.target.type === 'checkbox'){
+    var tr = e.target.closest('tr');
+    if (tr && !tr.classList.contains('edited')){ tr.classList.add('edited'); applyRosterView(); }
   }
+  if (e.target.dataset.k === 'z') fillZoneFilter();
 });
 
 /* 표 → people[] (기존 사람은 확인코드 유지) */
