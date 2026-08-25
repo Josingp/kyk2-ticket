@@ -525,7 +525,7 @@ footer{margin-top:34px;text-align:center;color:#7672ab;font-size:11.5px;line-hei
     명단 원본은 서버 저장소(Upstash)에만 보관되고, 공개 DB에는 암호문만 올라갑니다.</p>
     <p class="desc" style="margin-top:8px">열 이름: <code>대분류</code> <code>소분류</code>(동반인·선택) <code>연락처</code> <code>구역</code> <code>좌석</code> (선택: <code>등급</code> <code>비표대상</code> <code>인원</code>)
     · 조회는 대분류+연락처 뒤 4자리로 하며, 소분류가 있으면 티켓에 <b>대분류 (소분류)</b>로 표기됩니다
-    · 같은 사람의 좌석이 여러 개면 행을 여러 줄로 · <code>대분류</code>가 비어 있으면 <code>소분류</code>를 이름으로 사용합니다
+    · 같은 사람의 좌석이 여러 개면 행을 여러 줄로 적거나, 좌석 칸에 <code>1열 1~10번</code>처럼 범위(~)·쉼표로 적으면 <b>한 장씩 자동 분리</b>됩니다 (구역이 여럿이면 <code>A2 1열 1~10번, I1 3열 47~51번</code>처럼) · <code>대분류</code>가 비어 있으면 <code>소분류</code>를 이름으로 사용합니다
     · <code>비표대상</code>에 <b>O</b>를 표시하면 그 사람이 티켓을 확인할 때 촬영 안내 확인 후 <b>“씨유 앞 인포데스크에서 비표 수령 → VIP입구 입장”</b> 팝업이 한 번 더 뜹니다 (<code>인원</code> = 비표 매수, 빈칸이면 1) · 양식: <a href="tools/명단_양식.xlsx" download>명단_양식.xlsx</a></p>
     <label class="drop" id="drop">
       명단 엑셀(.xlsx)을 여기로 드래그하거나<br>클릭해서 선택
@@ -2192,6 +2192,38 @@ function parseSheet(wb){
   if (hi < 0) throw new Error('제목 행을 찾지 못했습니다. 첫 행에 "이름, 연락처, 구역, 좌석" 열 이름이 있어야 합니다.');
   if (cols.zone == null || cols.seat == null) throw new Error('"구역"과 "좌석" 열이 필요합니다.');
 
+  /* 좌석 칸의 범위(~)·쉼표 표기를 한 좌석씩 분리
+     예) 구역 "A2, I1" · 좌석 "A2 1열 1~10번, I1 3열 47~51번" → 15장 */
+  function expandSeats(zoneCell, seatCell){
+    var zoneList = String(zoneCell || '').split(/[,·;/]+/).map(function(x){ return x.trim(); }).filter(Boolean);
+    var segs = String(seatCell || '').split(/[,·;/]+/).map(function(x){ return x.trim(); }).filter(Boolean);
+    if (!segs.length) return [{ zone: zoneList.join(', '), seat: String(seatCell || '').trim() }];
+    var out = [], curRow = null;
+    for (var si = 0; si < segs.length; si++){
+      var seg = segs[si], segZone = null;
+      var zm = seg.match(/^([A-Za-z]{1,3}\s?\d{0,2})\s*(?:구역)?\s+(?=\d)/);
+      if (zm){ segZone = zm[1].replace(/\s+/g, ''); seg = seg.slice(zm[0].length); }
+      var rm = seg.match(/(\d+)\s*열/);
+      if (rm) curRow = rm[1];
+      var zoneFor = segZone || (zoneList.length ? zoneList[Math.min(si, zoneList.length - 1)] : '');
+      var nm = seg.match(/(\d+)\s*[~\-]\s*(\d+)\s*번?/);
+      var a = null, b = null;
+      if (nm){ a = parseInt(nm[1], 10); b = parseInt(nm[2], 10); }
+      else {
+        var one = seg.match(/(\d+)\s*번/) || (rm ? null : seg.match(/^(\d+)$/));
+        if (one){ a = b = parseInt(one[1], 10); }
+        else if (rm){ var tail = seg.slice(seg.indexOf(rm[0]) + rm[0].length).match(/(\d+)/); if (tail) a = b = parseInt(tail[1], 10); }
+      }
+      if (a == null || b == null || b < a || (b - a) > 200){
+        out.push({ zone: zoneFor, seat: segs[si] });          /* 해석 불가·비정상 범위는 원문 그대로 1장 */
+        continue;
+      }
+      for (var n = a; n <= b; n++)
+        out.push({ zone: zoneFor, seat: (curRow ? curRow + '열 ' : '') + n + '번' });
+    }
+    return out;
+  }
+
   var rows = [], problems = [];
   for (var i = hi + 1; i < aoa.length; i++) {
     var a = aoa[i];
@@ -2213,7 +2245,9 @@ function parseSheet(wb){
     var ln = i + 1;
     if (T.last4(phone).length < 4) { problems.push(ln + '행 (' + name + '): 연락처 숫자가 4자리 미만'); continue; }
     if (!zone || !seat) { problems.push(ln + '행 (' + name + '): 구역/좌석 비어 있음'); continue; }
-    rows.push({ ln: ln, name: name, phone: phone, zone: zone, seat: seat, grade: grade, sub: sub, bdg: bdg, bdgN: bdgN });
+    expandSeats(zone, seat).forEach(function(es){
+      rows.push({ ln: ln, name: name, phone: phone, zone: es.zone, seat: es.seat, grade: grade, sub: sub, bdg: bdg, bdgN: bdgN });
+    });
   }
   return { rows: rows, problems: problems };
 }
