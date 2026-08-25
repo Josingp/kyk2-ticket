@@ -409,6 +409,7 @@ footer{margin-top:34px;text-align:center;color:#7672ab;font-size:11.5px;line-hei
 .pp-meta{display:flex;justify-content:center;align-items:center;gap:14px;flex-wrap:wrap;padding:0 14px 20px;font-size:12.5px;color:#fff}
 .pp-live b{font-variant-numeric:tabular-nums}
 .tablewrap{max-height:62vh;overflow:auto;border:1px solid rgba(255,255,255,.12);border-radius:10px}
+.dash-scroll{max-height:58vh;overflow:auto;border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:6px 8px}
 table.roster thead th{position:sticky;top:0;z-index:3;background:#1b2233;box-shadow:0 1px 0 rgba(255,255,255,.14)}
 table.roster tr.edited td:first-child{box-shadow:inset 3px 0 0 #F2C744}
 .rpager{display:flex;align-items:center;gap:10px;margin:8px 0 4px;font-size:12.5px}
@@ -593,7 +594,13 @@ table.roster tr.edited td:first-child{box-shadow:inset 3px 0 0 #F2C744}
         <button type="button" data-f="part">일부</button>
         <button type="button" data-f="done">전원</button>
       </div>
-      <div id="dashList"></div>
+      <div class="rpager">
+        <button class="ghost" id="dpPrev" type="button">◀</button>
+        <span id="dpInfo">-</span>
+        <button class="ghost" id="dpNext" type="button">▶</button>
+        <select id="dpSize"><option value="100">100명씩</option><option value="200">200명씩</option><option value="0">전체 표시</option></select>
+      </div>
+      <div id="dashList" class="dash-scroll"></div>
       <div class="err" id="dashErr"></div>
     </div>
 
@@ -2735,7 +2742,14 @@ function renderDash(){
   });
 
   var host = $('#dashList'); host.innerHTML = '';
-  list.forEach(function(r){
+  var size = DP.size > 0 ? DP.size : (list.length || 1);
+  var maxPage = Math.max(0, Math.ceil(list.length / size) - 1);
+  if (DP.page > maxPage) DP.page = maxPage;
+  var from = DP.page * size, to = Math.min(list.length, from + size);
+  $('#dpInfo').textContent = list.length ? (from + 1) + '–' + to + ' / ' + list.length + '명' : '표시할 인원 없음';
+  $('#dpPrev').disabled = DP.page <= 0;
+  $('#dpNext').disabled = DP.page >= maxPage;
+  list.slice(from, to).forEach(function(r){
     var g = r.g, x = r.x;
     var div = document.createElement('div');
     div.className = 'p-row' + (x.st === 'done' ? ' done' : x.st === 'part' ? ' part' : '');
@@ -2769,10 +2783,14 @@ $('#btnDashLoad').addEventListener('click', function(){
     }, 8000);
   });
 });
-$('#dashSearch').addEventListener('input', function(){ dashQuery = this.value.trim(); renderDash(); });
+var DP = { page: 0, size: 100 };
+$('#dpPrev').addEventListener('click', function(){ if (DP.page > 0){ DP.page--; renderDash(); $('#dashList').scrollTop = 0; } });
+$('#dpNext').addEventListener('click', function(){ DP.page++; renderDash(); $('#dashList').scrollTop = 0; });
+$('#dpSize').addEventListener('change', function(){ DP.size = parseInt(this.value, 10) || 0; DP.page = 0; renderDash(); });
+$('#dashSearch').addEventListener('input', function(){ dashQuery = this.value.trim(); DP.page = 0; renderDash(); });
 $('#dashFilters').addEventListener('click', function(ev){
   var b = ev.target.closest('button'); if (!b) return;
-  dashFilter = b.dataset.f;
+  dashFilter = b.dataset.f; DP.page = 0;
   var bs = this.querySelectorAll('button');
   for (var i = 0; i < bs.length; i++) bs[i].classList.toggle('on', bs[i] === b);
   renderDash();
