@@ -523,9 +523,10 @@ footer{margin-top:34px;text-align:center;color:#7672ab;font-size:11.5px;line-hei
     <p class="desc encwarn" id="encWarn" style="display:none">⚠ 서버 저장 암호화 키(<code>DATA_KEY</code>)가 아직 설정되지 않아 명단이 평문으로 저장됩니다. Vercel 환경변수에 등록해 주세요. (README 참고)</p>
     <p class="desc" style="margin-top:8px">명단 엑셀을 올리면 암호화 후 <b>서버 DB에 바로 적용</b>됩니다. (재배포 불필요, 즉시 반영)
     명단 원본은 서버 저장소(Upstash)에만 보관되고, 공개 DB에는 암호문만 올라갑니다.</p>
-    <p class="desc" style="margin-top:8px">열 이름: <code>대분류</code> <code>소분류</code>(동반인·선택) <code>연락처</code> <code>구역</code> <code>좌석</code> (선택: <code>등급</code>)
+    <p class="desc" style="margin-top:8px">열 이름: <code>대분류</code> <code>소분류</code>(동반인·선택) <code>연락처</code> <code>구역</code> <code>좌석</code> (선택: <code>등급</code> <code>비표대상</code> <code>인원</code>)
     · 조회는 대분류+연락처 뒤 4자리로 하며, 소분류가 있으면 티켓에 <b>대분류 (소분류)</b>로 표기됩니다
-    · 같은 사람의 좌석이 여러 개면 행을 여러 줄로 · 양식: <a href="tools/명단_양식.xlsx" download>명단_양식.xlsx</a></p>
+    · 같은 사람의 좌석이 여러 개면 행을 여러 줄로
+    · <code>비표대상</code>에 <b>O</b>를 표시하면(빈칸은 일반) 그 사람이 티켓을 확인할 때 촬영 안내 확인 후 <b>“씨유 앞 인포데스크에서 비표 수령 → VIP입구 입장”</b> 팝업이 한 번 더 뜹니다 · <code>인원</code> = 비표 매수(빈칸이면 1) · 양식: <a href="tools/명단_양식.xlsx" download>명단_양식.xlsx</a></p>
     <label class="drop" id="drop">
       명단 엑셀(.xlsx)을 여기로 드래그하거나<br>클릭해서 선택
       <input type="file" id="file" accept=".xlsx,.xls">
@@ -535,16 +536,6 @@ footer{margin-top:34px;text-align:center;color:#7672ab;font-size:11.5px;line-hei
     <div class="err" id="err"></div>
     <div class="warn" id="warn"></div>
     <div class="done" id="done"></div>
-    <div class="desc" style="margin-top:16px;padding-top:12px;border-top:1px dashed rgba(255,255,255,.14)">
-      <b>비표 대상자 명단(선택)</b> — 열 이름: <code>비표대상</code> <code>방문자명</code> <code>연락처</code> <code>인원</code> <code>구역</code> <code>좌석번호</code><br>
-      <code>비표대상</code> 열에 <b>O</b>가 표시된 행만 대상으로 처리하고 빈칸 행은 무시합니다.<br>
-      대상자가 티켓을 확인하면 촬영 안내 확인 후 <b>“씨유 앞 인포데스크에서 비표 수령 → VIP입구 입장”</b> 팝업이 한 번 더 뜹니다.
-      명단 업로드 전·후 아무 때나 올릴 수 있습니다 · 양식: <a href="tools/비표_양식.xlsx" download>비표_양식.xlsx</a></div>
-    <label class="drop" id="dropBdg" style="padding:16px;font-size:13px">
-      비표 대상자 엑셀(.xlsx)을 여기로 드래그하거나 클릭해서 선택
-      <input type="file" id="fileBdg" accept=".xlsx,.xls">
-    </label>
-    <div class="stat" id="bdgStat" style="display:none"></div>
     <div class="btns" id="btns">
       <button id="dlDb" type="button">db.json 내려받기 (백업)</button>
       <button id="dlStaff" type="button">스태프 확인용 명단(.xlsx) 내려받기</button>
@@ -2169,110 +2160,6 @@ $('#file').addEventListener('change', function(e){
   e.target.value = '';
 });
 
-/* ---------- 비표 대상자 명단 ---------- */
-var BADGES = null;                          /* [{tag,name,phone,n,zone,seat,key}] */
-var dropBdg = $('#dropBdg');
-['dragover','dragenter'].forEach(function(ev){
-  dropBdg.addEventListener(ev, function(e){ e.preventDefault(); dropBdg.classList.add('hover'); });
-});
-['dragleave','drop'].forEach(function(ev){
-  dropBdg.addEventListener(ev, function(e){ e.preventDefault(); dropBdg.classList.remove('hover'); });
-});
-dropBdg.addEventListener('drop', function(e){
-  var f = e.dataTransfer.files && e.dataTransfer.files[0];
-  if (f) handleBadgeFile(f);
-});
-$('#fileBdg').addEventListener('change', function(e){
-  if (e.target.files[0]) handleBadgeFile(e.target.files[0]);
-  e.target.value = '';
-});
-function bdgStat(msg, isErr){
-  var el = $('#bdgStat'); el.style.display = 'block'; el.textContent = msg;
-  el.style.color = isErr ? '#ff9d9d' : '';
-}
-function parseBadgeSheet(wb){
-  var ws = wb.Sheets[wb.SheetNames[0]];
-  var aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-  var hi = -1, cols = {};
-  for (var r = 0; r < Math.min(aoa.length, 6); r++) {
-    var row = aoa[r].map(function(c){ return String(c).trim(); }), m = {};
-    row.forEach(function(c, idx){
-      if (/비표/.test(c)) m.tag = idx;
-      else if (/방문자|이름|성명|대분류/.test(c)) m.name = idx;
-      else if (/연락처|전화|휴대폰|핸드폰/.test(c)) m.phone = idx;
-      else if (/인\s*원/.test(c)) m.n = idx;
-      else if (/구역/.test(c)) m.zone = idx;
-      else if (/좌석/.test(c)) m.seat = idx;
-    });
-    if (m.name != null && m.phone != null) { hi = r; cols = m; break; }
-  }
-  if (hi < 0) throw new Error('비표 명단의 제목 행을 찾지 못했습니다. "방문자명, 연락처" 열이 있어야 합니다.');
-  var rows = [], skipped = 0;
-  for (var i = hi + 1; i < aoa.length; i++) {
-    var a = aoa[i];
-    var name = String(cols.name != null ? a[cols.name] : '').trim();
-    if (!name) continue;
-    if (cols.tag != null){                      /* 비표대상 열: O 표시 행만 대상, 빈칸은 무시 */
-      var tg = String(a[cols.tag] == null ? '' : a[cols.tag]).trim().toUpperCase();
-      var isTarget = tg === 'O' || tg === 'ㅇ' || tg === '0' || tg === 'Y' || tg === 'YES' ||
-                     tg === 'V' || tg === '√' || tg === '1' || tg === 'TRUE' || tg === '예' || tg === '대상';
-      if (!isTarget){ skipped++; continue; }
-    }
-    var phone = String(cols.phone != null ? a[cols.phone] : '').trim();
-    rows.push({
-      name: name, phone: phone,
-      n: parseInt(String(cols.n != null ? a[cols.n] : '').replace(/\D/g, ''), 10) || 1,
-      zone: String(cols.zone != null ? a[cols.zone] : '').trim(),
-      seat: String(cols.seat != null ? a[cols.seat] : '').trim(),
-      key: T.normName(name) + '|' + T.last4(phone)
-    });
-  }
-  rows.skipped = skipped;
-  return rows;
-}
-/* people 배열에 bd 필드 부여/해제. BADGES 없으면 손대지 않음 */
-function applyBadges(people){
-  if (!BADGES) return null;
-  var by = new Map(); BADGES.forEach(function(b){ by.set(b.key, b); });
-  var used = new Set(), matched = 0;
-  people.forEach(function(pp){
-    var k = T.normName(pp.n) + '|' + T.last4(pp.p);
-    var b = by.get(k);
-    if (b){
-      pp.bd = { n: b.n || 1 };
-      used.add(k); matched++;
-    } else if (pp.bd) delete pp.bd;
-  });
-  return { matched: matched, miss: BADGES.filter(function(b){ return !used.has(b.key); }) };
-}
-async function handleBadgeFile(f){
-  try { await loadXLSX(); }
-  catch(e){ return bdgStat('엑셀 처리 라이브러리를 불러오지 못했습니다. 네트워크를 확인해 주세요.', true); }
-  var rows;
-  try { rows = parseBadgeSheet(XLSX.read(await f.arrayBuffer(), { type: 'array' })); }
-  catch(e){ return bdgStat(e.message || '비표 엑셀을 해석하지 못했습니다.', true); }
-  if (!rows.length) return bdgStat('비표 명단에 O로 표시된 대상 행이 없습니다.', true);
-  BADGES = rows;
-  var skipNote = rows.skipped ? ' (빈칸 ' + rows.skipped + '행 제외)' : '';
-  if (serverPeople && serverPeople.length){
-    var ppl = JSON.parse(JSON.stringify(serverPeople));
-    var m = applyBadges(ppl);
-    bdgStat('비표 대상 ' + rows.length + '명' + skipNote + ' — 서버 반영 중…');
-    try {
-      var sum = await applyIncremental(ppl, function(dn, tt){ bdgStat('비표 반영 암호화 중… ' + dn + ' / ' + tt + '명'); });
-      DB = sum.db; serverPeople = ppl;
-      if (dbBlobURL) URL.revokeObjectURL(dbBlobURL);
-      dbBlobURL = URL.createObjectURL(new Blob([JSON.stringify(sum.db, null, 1)], { type: 'application/json' }));
-      if (window.XLSX && XLSX.utils && XLSX.utils.aoa_to_sheet) staffBook = makeStaffBook(ppl);
-      $('#btns').style.display = 'flex';
-      bdgStat('✔ 비표 대상 ' + rows.length + '명 중 ' + m.matched + '명이 초대 명단과 매칭 — 서버 반영 완료'
-        + (m.miss.length ? ' · 미매칭 ' + m.miss.length + '명: ' + m.miss.map(function(b){ return b.name; }).join(', ') : ''));
-      if ($('#rosterBox').style.display !== 'none') renderRoster();
-    } catch(e){ bdgStat('서버 반영 실패: ' + apiErrMsg(e) + ' — 같은 파일을 다시 올려 주세요.', true); }
-  } else {
-    bdgStat('비표 대상 ' + rows.length + '명 준비됨' + skipNote + ' — 초대 명단 엑셀을 올리면 함께 반영됩니다.');
-  }
-}
 
 function resetAdmin(){
   ['err','warn','done'].forEach(function(id){ var el = $('#'+id); el.style.display = 'none'; el.textContent = ''; });
@@ -2296,6 +2183,8 @@ function parseSheet(wb){
       else if (/연락처|전화|휴대폰|핸드폰/.test(c)) m.phone = idx;
       else if (/구역/.test(c)) m.zone = idx;
       else if (/좌석/.test(c)) m.seat = idx;
+      else if (/비표/.test(c)) m.bdg = idx;
+      else if (/인\s*원/.test(c)) m.bdgN = idx;
       else if (/등급|비고|메모|VIP/i.test(c)) m.grade = idx;
     });
     if (m.name != null && m.phone != null) { hi = r; cols = m; break; }
@@ -2313,11 +2202,17 @@ function parseSheet(wb){
     var seat  = String(a[cols.seat] == null ? '' : a[cols.seat]).trim();
     var grade = cols.grade != null ? String(a[cols.grade] == null ? '' : a[cols.grade]).trim() : '';
     var sub = cols.sub != null ? String(a[cols.sub] == null ? '' : a[cols.sub]).trim() : '';
+    var bdg = false, bdgN = 0;
+    if (cols.bdg != null){
+      var tg = String(a[cols.bdg] == null ? '' : a[cols.bdg]).trim().toUpperCase();
+      bdg = tg === 'O' || tg === 'ㅇ' || tg === '0' || tg === 'Y' || tg === 'YES' || tg === 'V' || tg === '√' || tg === '1' || tg === 'TRUE' || tg === '예' || tg === '대상';
+    }
+    if (cols.bdgN != null) bdgN = parseInt(String(a[cols.bdgN] == null ? '' : a[cols.bdgN]).replace(/\D/g, ''), 10) || 0;
     if (!phone && !zone && !seat) continue;
     var ln = i + 1;
     if (T.last4(phone).length < 4) { problems.push(ln + '행 (' + name + '): 연락처 숫자가 4자리 미만'); continue; }
     if (!zone || !seat) { problems.push(ln + '행 (' + name + '): 구역/좌석 비어 있음'); continue; }
-    rows.push({ ln: ln, name: name, phone: phone, zone: zone, seat: seat, grade: grade, sub: sub });
+    rows.push({ ln: ln, name: name, phone: phone, zone: zone, seat: seat, grade: grade, sub: sub, bdg: bdg, bdgN: bdgN });
   }
   return { rows: rows, problems: problems };
 }
@@ -2472,6 +2367,7 @@ async function handleFileInner(f){
     if (!groups.has(key))
       groups.set(key, { n: r.name, p: maskPhone(r.phone), t: [], lns: [], nums: new Map() });
     var g = groups.get(key);
+    if (r.bdg) g.bd = { n: Math.max((g.bd && g.bd.n) || 1, r.bdgN || 1) };
     /* 같은 이름+뒤4자리 안에서 실제 전체 번호(숫자만)별로 행을 모은다.
        같은 사람의 좌석 여러 매(번호 동일, 표기만 달라도)는 정상 — 번호가 2가지 이상일 때만 충돌. */
     if (!g.nums.has(digits)) g.nums.set(digits, []);
@@ -2491,11 +2387,10 @@ async function handleFileInner(f){
   $('#bar').style.display = 'block';
   $('#stat').style.display = 'block';
   $('#stat').textContent = '서버 명단과 비교하는 중…';
-  var people = Array.from(groups.values()).map(function(g){ return { n: g.n, p: g.p, t: g.t }; });
-  var bm = applyBadges(people);
+  var people = Array.from(groups.values()).map(function(g){ return { n: g.n, p: g.p, t: g.t, bd: g.bd }; });
+  var bdgCnt = people.filter(function(pp){ return pp.bd; }).length;
 
   var warnMsgs = [];
-  if (bm && bm.miss.length) warnMsgs.push('⚠ 비표 명단 미매칭 ' + bm.miss.length + '명(초대 명단에 없음): ' + bm.miss.map(function(b){ return b.name; }).join(', '));
   if (collisions.length) warnMsgs.push('⚠ 이름+뒤4자리 중복:\n- ' + collisions.join('\n- '));
   if (parsed.problems.length) warnMsgs.push('⚠ 건너뛴 행:\n- ' + parsed.problems.join('\n- '));
   if (warnMsgs.length) { var w = $('#warn'); w.textContent = warnMsgs.join('\n\n'); w.style.display = 'block'; }
@@ -2516,7 +2411,7 @@ async function handleFileInner(f){
     d.innerHTML = '✔ <b>' + people.length + '명 · 티켓 ' + rows.length + '매</b> — 서버에 적용 완료, 즉시 반영됩니다.<br>'
       + '변경 반영: 추가 ' + sum.added + ' · 수정 ' + sum.changed + ' · 삭제 ' + sum.removed + ' · 유지 ' + sum.kept + '명'
       + (sum.kept ? ' (유지 인원의 확인코드·공유 링크는 그대로)' : '')
-      + (bm ? '<br>비표 대상 ' + BADGES.length + '명 중 <b>' + bm.matched + '명</b> 티켓에 반영' : '');
+      + (bdgCnt ? '<br>비표 대상 <b>' + bdgCnt + '명</b> 반영 (비표대상 O 표시)' : '');
     d.style.display = 'block';
     $('#stat').textContent = '적용 완료 · ' + new Date().toLocaleTimeString('ko-KR');
     if ($('#rosterBox').style.display !== 'none') renderRoster();
