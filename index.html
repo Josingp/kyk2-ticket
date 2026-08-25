@@ -619,7 +619,7 @@ footer{margin-top:34px;text-align:center;color:#7672ab;font-size:11.5px;line-hei
       </div>
       <div class="tablewrap">
         <table class="roster">
-          <thead><tr><th>대분류</th><th>소분류</th><th>연락처</th><th>구역</th><th>좌석</th><th>등급</th><th></th></tr></thead>
+          <thead><tr><th>대분류</th><th>소분류</th><th>연락처</th><th>구역</th><th>좌석</th><th>등급</th><th title="지류(종이) 티켓 교환 대상">지류</th><th></th></tr></thead>
           <tbody id="rosterBody"></tbody>
         </table>
       </div>
@@ -2844,7 +2844,7 @@ function rosterReset(){
 }
 function rosterFail(msg){ var e=$('#rErr'); e.textContent=msg; e.style.display='block'; }
 
-function rowEl(vals, code){
+function rowEl(vals, code, pp){
   var tr = document.createElement('tr');
   if (code) tr.dataset.c = code;
   var widths = [78, 70, 116, 72, 100, 56];
@@ -2857,6 +2857,10 @@ function rowEl(vals, code){
     if (k === 'p') inp.inputMode = 'numeric';
     td.appendChild(inp); tr.appendChild(td);
   });
+  var tdp = document.createElement('td'); tdp.style.textAlign = 'center';
+  var ck = document.createElement('input'); ck.type = 'checkbox'; ck.dataset.k = 'pp'; ck.checked = !!pp;
+  ck.title = '체크하면 지류(종이) 티켓 교환 대상 — 구역·좌석 크게 + 인포데스크 교환 안내 화면';
+  tdp.appendChild(ck); tr.appendChild(tdp);
   var rm = document.createElement('td'); rm.className = 'rm';
   var b = document.createElement('button'); b.type = 'button'; b.textContent = '✕'; b.title = '행 삭제';
   b.addEventListener('click', function(){ tr.remove(); rosterCount(); });
@@ -2867,7 +2871,7 @@ function renderRoster(){
   var tb = $('#rosterBody'); tb.innerHTML = '';
   (serverPeople || []).forEach(function(g){
     g.t.forEach(function(tk){
-      tb.appendChild(rowEl([g.n, tk.b || '', g.p, tk.z, tk.s, tk.g || ''], g.c));
+      tb.appendChild(rowEl([g.n, tk.b || '', g.p, tk.z, tk.s, tk.g || ''], g.c, g.pp));
     });
   });
   $('#rosterBox').style.display = 'block';
@@ -2920,15 +2924,18 @@ $('#rosterSearch').addEventListener('input', function(){
 function collectRoster(){
   var oldByKey = new Map();
   (serverPeople || []).forEach(function(g){
-    oldByKey.set(T.normName(g.n) + '|' + T.last4(g.p), g.c);
+    oldByKey.set(T.normName(g.n) + '|' + T.last4(g.p), g);
   });
   var trs = $('#rosterBody').children;
   var groups = new Map(), errs = [], ticketCount = 0;
   for (var i = 0; i < trs.length; i++) {
     var tr = trs[i]; tr.classList.remove('badrow');
-    var v = {};
+    var v = {}, ppChecked = false;
     var ins = tr.querySelectorAll('input');
-    for (var k = 0; k < ins.length; k++) v[ins[k].dataset.k] = ins[k].value.trim();
+    for (var k = 0; k < ins.length; k++){
+      if (ins[k].type === 'checkbox'){ if (ins[k].dataset.k === 'pp' && ins[k].checked) ppChecked = true; }
+      else v[ins[k].dataset.k] = ins[k].value.trim();
+    }
     if (!v.n && !v.p && !v.z && !v.s) { continue; } // 완전 빈 행 무시
     var bad = [];
     if (!v.n) bad.push('이름');
@@ -2937,7 +2944,12 @@ function collectRoster(){
     if (!v.s) bad.push('좌석');
     if (bad.length) { tr.classList.add('badrow'); errs.push((i+1) + '번째 행: ' + bad.join(', ') + ' 확인'); continue; }
     var key = T.normName(v.n) + '|' + T.last4(v.p);
-    if (!groups.has(key)) groups.set(key, { n: v.n, p: maskPhone(v.p), c: oldByKey.get(key) || undefined, t: [] });
+    if (!groups.has(key)){
+      var oc = oldByKey.get(key);
+      groups.set(key, { n: v.n, p: maskPhone(v.p), c: oc ? oc.c : undefined,
+                        bd: oc && oc.bd ? oc.bd : undefined, t: [] });   /* 비표는 자동 보존 */
+    }
+    if (ppChecked) groups.get(key).pp = 1;                               /* 지류는 체크박스 기준 */
     groups.get(key).t.push({ z: v.z, s: v.s, g: v.g || undefined, b: v.b || undefined });
     ticketCount++;
   }
