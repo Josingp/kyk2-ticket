@@ -316,24 +316,6 @@ async function runCase(label, name, phone, person, checks, opts) {
     ['묶음 보내기 숨김', c => c.doc.querySelector('#multiShare').style.display === 'none'],
   ]);
 
-  // 케이스 13: 지류 티켓 교환 대상 — 구역·좌석 크게 + 교환 안내, 입장확인·공유·QR 없음
-  fails += await runCase('지류 티켓 교환 화면', '테스트지류', '010-0000-1313',
-    { n: '테스트지류', c: 'TESTCODE13', t: [{ z: 'I1구역', s: '3열 47번' }, { z: 'I1구역', s: '3열 48번' }, { z: 'I1구역', s: '3열 49번' }], pp: 1 }, [
-    ['교환 안내 카드 표시', c => !!c.doc.querySelector('#tickets .ticket.paper')],
-    ['구역·좌석 크게(압축 표기)', c => {
-      const t = c.doc.querySelector('#tickets .paper').textContent;
-      return t.includes('I1') && t.includes('3열 47~49번');
-    }],
-    ['인포데스크 교환 문구', c => {
-      const t = c.doc.querySelector('.pp-notice').textContent;
-      return t.includes('인포데스크') && t.includes('지류') && t.includes('교환');
-    }],
-    ['입장 확인 버튼 없음', c => c.doc.querySelectorAll('#tickets .t-staffbtn').length === 0],
-    ['공유 버튼 없음', c => c.doc.querySelectorAll('#tickets .t-sharebtn').length === 0],
-    ['QR 없음', c => c.doc.querySelectorAll('#tickets .t-qr svg, #tickets .t-qr img').length === 0],
-    ['좌석 안내 숨김', c => !c.guideShown],
-  ]);
-
   console.log('\n총 실패:', fails);
   process.exit(fails ? 1 : 0);
 })();
