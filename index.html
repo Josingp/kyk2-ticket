@@ -406,7 +406,6 @@ footer{margin-top:34px;text-align:center;color:#7672ab;font-size:11.5px;line-hei
 .tablewrap{max-height:62vh;overflow:auto;border:1px solid rgba(255,255,255,.12);border-radius:10px}
 .dash-scroll{max-height:58vh;overflow:auto;border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:6px 8px}
 .bdcell{white-space:nowrap;text-align:center}
-.bdcell input[type=number]{width:44px;min-width:44px !important;margin-left:4px;text-align:center}
 table.roster thead th{position:sticky;top:0;z-index:3;background:#1b2233;box-shadow:0 1px 0 rgba(255,255,255,.14)}
 table.roster tr.edited td:first-child{box-shadow:inset 3px 0 0 #F2C744}
 .rpager{display:flex;align-items:center;gap:10px;margin:8px 0 4px;font-size:12.5px}
@@ -632,7 +631,7 @@ table.roster tr.edited td:first-child{box-shadow:inset 3px 0 0 #F2C744}
       </div>
       <div class="tablewrap">
         <table class="roster">
-          <thead><tr><th>대분류</th><th>소분류</th><th>연락처</th><th>구역</th><th>좌석</th><th>등급</th><th title="체크 = 비표 수령 대상 · 숫자 = 비표 매수">비표·매수</th><th></th></tr></thead>
+          <thead><tr><th>대분류</th><th>소분류</th><th>연락처</th><th>구역</th><th>좌석</th><th>등급</th><th title="체크 = 비표 수령 대상">비표</th><th></th></tr></thead>
           <tbody id="rosterBody"></tbody>
         </table>
       </div>
@@ -843,7 +842,7 @@ function maybeBadgePopup(person){
   bdgShown = true;
   var o = document.getElementById('bdgOverlay'); if (!o) return;
   var who = document.getElementById('bdgWho');
-  who.textContent = esc(person.n) + ' · 비표 ' + (person.bd.n || 1) + '매';
+  who.textContent = esc(person.n);
   o.classList.add('show');
 }
 
@@ -2321,7 +2320,7 @@ async function buildDB(people, onProg){
 function makeStaffBook(people){
   var rows = [];
   people.forEach(function(g){
-    var bdTxt = g.bd ? ('O' + ((g.bd.n || 1) > 1 ? ' ' + g.bd.n + '매' : '')) : '';
+    var bdTxt = g.bd ? 'O' : '';
     g.t.forEach(function(tk){ rows.push([g.n, tk.b || '', g.p, tk.z, tk.s, T.fmtCode(g.c), tk.g || '', bdTxt]); });
   });
   rows.sort(function(a, b){ return (a[3]+a[4]).localeCompare(b[3]+b[4], 'ko'); });
@@ -2725,9 +2724,7 @@ function rowEl(vals, code, bd){
   var tdb = document.createElement('td'); tdb.className = 'bdcell';
   var ck = document.createElement('input'); ck.type = 'checkbox'; ck.dataset.k = 'bd'; ck.checked = !!bd;
   ck.title = '체크하면 비표 수령 대상 — 티켓 확인 시 인포데스크 수령 팝업';
-  var num = document.createElement('input'); num.type = 'number'; num.min = '1'; num.dataset.k = 'bdn';
-  num.value = bd && bd.n ? bd.n : 1; num.title = '비표 매수';
-  tdb.appendChild(ck); tdb.appendChild(num); tr.appendChild(tdb);
+  tdb.appendChild(ck); tr.appendChild(tdb);
   var rm = document.createElement('td'); rm.className = 'rm';
   var b = document.createElement('button'); b.type = 'button'; b.textContent = '✕'; b.title = '행 삭제';
   b.addEventListener('click', function(){ tr.remove(); rosterCount(); });
@@ -2853,11 +2850,10 @@ function collectRoster(){
   var groups = new Map(), errs = [], ticketCount = 0;
   for (var i = 0; i < trs.length; i++) {
     var tr = trs[i]; tr.classList.remove('badrow');
-    var v = {}, bdOn = false, bdN = 0;
+    var v = {}, bdOn = false;
     var ins = tr.querySelectorAll('input');
     for (var k = 0; k < ins.length; k++){
       if (ins[k].dataset.k === 'bd'){ if (ins[k].checked) bdOn = true; }
-      else if (ins[k].dataset.k === 'bdn'){ bdN = Math.max(bdN, parseInt(ins[k].value, 10) || 0); }
       else v[ins[k].dataset.k] = ins[k].value.trim();
     }
     if (!v.n && !v.p && !v.z && !v.s) { continue; } // 완전 빈 행 무시
@@ -2872,10 +2868,7 @@ function collectRoster(){
       var oc = oldByKey.get(key);
       groups.set(key, { n: v.n, p: maskPhone(v.p), c: oc ? oc.c : undefined, t: [] });
     }
-    if (bdOn){
-      var gg = groups.get(key);
-      gg.bd = { n: Math.max((gg.bd && gg.bd.n) || 1, bdN || 1) };        /* 체크된 행이 하나라도 있으면 비표 대상 */
-    }
+    if (bdOn) groups.get(key).bd = { n: 1 };        /* 체크된 행이 하나라도 있으면 비표 대상 */
     groups.get(key).t.push({ z: v.z, s: v.s, g: v.g || undefined, b: v.b || undefined });
     ticketCount++;
   }

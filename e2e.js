@@ -280,9 +280,9 @@ async function runCase(label, name, phone, person, checks, opts) {
       const t = c.doc.querySelector('#bdgOverlay').textContent;
       return t.includes('인포데스크') && t.includes('VIP입구');
     }],
-    ['대상 정보(이름·매수)', c => {
+    ['대상 표시(이름만, 매수 없음)', c => {
       const t = c.doc.querySelector('#bdgWho').textContent;
-      return t.includes('테스트구') && t.includes('3매');
+      return t.includes('테스트구') && !t.includes('매');
     }],
     ['확인 누르면 닫힘', c => { c.doc.querySelector('#bdgBtn').click(); return !c.doc.querySelector('#bdgOverlay').classList.contains('show'); }],
     ['티켓은 정상 렌더', c => c.ticketCount === 1],
