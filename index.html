@@ -594,11 +594,11 @@ table.roster tr.edited td:first-child{box-shadow:inset 3px 0 0 #F2C744}
       <div class="err" id="dashErr"></div>
     </div>
 
-    <div class="subhead">
+    <div class="subhead" id="sweepHead">
       <h3>위치 기반 미검표 보정</h3>
       <button class="ghost" id="btnSweepLoad" type="button">대상 불러오기</button>
     </div>
-    <p class="desc" style="margin-top:8px">아직 <b>미입장</b>으로 남은 좌석 가운데, 관람객 기기가 행사장 반경 안에서 티켓 화면을 열었던 기록(체류 보고)이 있는 좌석을 모읍니다.
+    <p class="desc" id="sweepDesc" style="margin-top:8px">아직 <b>미입장</b>으로 남은 좌석 가운데, 관람객 기기가 행사장 반경 안에서 티켓 화면을 열었던 기록(체류 보고)이 있는 좌석을 모읍니다.
     실시간 자동 입장 규칙(보고 3회 · 1분 체류)에 못 미친 짧은 기록도 포함되니, 체류 시간과 보고 횟수를 보고 선택해 일괄 처리하세요. 처리된 좌석은 <b>자동 입장</b>으로 표시됩니다.</p>
     <div id="sweepBox" style="display:none">
       <div class="dashbar">
@@ -1192,6 +1192,13 @@ function initGeo(){
   }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 20000 });
 }
 $('#geoBadge').addEventListener('click', initGeo);
+/* 위치 기반 자동 입장이 꺼져 있으면 관리자 보정 UI도 숨김 */
+if (!(CFG.autoCheckin && CFG.autoCheckin.enabled)){
+  ['sweepHead', 'sweepDesc', 'sweepBox'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+}
 function distM(la1, lo1, la2, lo2){
   var R = 6371000, r = Math.PI / 180;
   var a = Math.sin((la2-la1)*r/2), b = Math.sin((lo2-lo1)*r/2);

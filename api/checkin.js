@@ -205,7 +205,7 @@ module.exports = async (req, res) => {
     if (body.action === 'list') {
       const checkins = await getHashCached('checkin', ev, 2000);
       const auto = await getHashCached('auto', ev, 2000);
-      res.status(200).json({ ok: true, checkins, auto, now: Date.now() });
+      res.status(200).json({ ok: true, checkins, auto, now: Date.now() });   /* 기존 자동 입장 기록은 그대로 유지 */
       return;
     }
 
@@ -230,6 +230,7 @@ module.exports = async (req, res) => {
     /* ---- 위치 기반 미검표 보정 — 관리자만 ---- */
     if (body.action === 'autosweep') {
       if (role !== 'a') { res.status(403).json({ error: 'forbidden' }); return; }
+      if (!AC.enabled) { res.status(200).json({ ok: false, error: 'auto_disabled' }); return; }
       const roster = await getRosterCached(ev, 5000);
       if (!roster || !roster.people) { res.status(404).json({ error: 'no_roster' }); return; }
       const checkMap = await getHashCached('checkin', ev, 1000);
