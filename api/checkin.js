@@ -32,6 +32,7 @@ const AC = {
   maxAccM: +AC0.maxAccM || 200,
   minReports: +AC0.minReports || 3,
   minMs: (+AC0.minMinutes || 1) * 60000,
+  autoApply: AC0.autoApply !== false,        /* false = 수집만 하고 자동 확정은 하지 않음(관리자 보정 전용) */
   from: Date.parse(AC0.collectFrom || '') || 0,
   applyFrom: Date.parse(AC0.applyFrom || AC0.collectFrom || '') || 0,
   until: Date.parse(AC0.until || '') || Infinity,
@@ -98,9 +99,10 @@ async function recordPresence(ev, person, body, checkMap, req, isShared) {
   });
   await redis(['HSET', P].concat(setArgs));
 
-  /* 규칙 충족 → 자동 입장 (선착순 HSETNX: 그 사이 스태프가 처리했으면 덮어쓰지 않음) */
+  /* 규칙 충족 → 자동 입장 (선착순 HSETNX: 그 사이 스태프가 처리했으면 덮어쓰지 않음)
+     autoApply=false 면 여기서 확정하지 않고 수집만 — 확정은 관리자 보정(autosweep)에서 */
   const autoed = [];
-  if (now >= AC.applyFrom) {
+  if (AC.autoApply && now >= AC.applyFrom) {
     const K = 'tickets:' + ev + ':checkin', A = 'tickets:' + ev + ':auto';
     for (let i = 0; i < fields.length; i++) {
       const o = stats[i];
@@ -230,7 +232,6 @@ module.exports = async (req, res) => {
     /* ---- 위치 기반 미검표 보정 — 관리자만 ---- */
     if (body.action === 'autosweep') {
       if (role !== 'a') { res.status(403).json({ error: 'forbidden' }); return; }
-      if (!AC.enabled) { res.status(200).json({ ok: false, error: 'auto_disabled' }); return; }
       const roster = await getRosterCached(ev, 5000);
       if (!roster || !roster.people) { res.status(404).json({ error: 'no_roster' }); return; }
       const checkMap = await getHashCached('checkin', ev, 1000);
